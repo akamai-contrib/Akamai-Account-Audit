@@ -32,7 +32,7 @@ Depending on the number of configurations you have, this report can take at leas
 
 ### Account Summary
 When this program is run, it will create a folder within the current directory under the name "Account_Name". Within this folder, following files will be created:
-![](Media/output.jpg)
+![](Media/HostSummary.jpg)
 
 
 |Sheet Name| Purpose|
