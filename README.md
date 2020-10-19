@@ -4,7 +4,7 @@
 
 This project is to create a site-audit tool for accessing Akamai related details. 
 
-As part of Phase 1, we are targeting only [Propert Manager (PAPI)](https://developer.akamai.com/api/luna/papi/overview.html).
+As part of Phase 1, we are targeting only [Propert Manager (PAPI)](https://developer.akamai.com/api/luna/papi/overview.html) and per host App security summary.
 
 ### Usage ###
 
