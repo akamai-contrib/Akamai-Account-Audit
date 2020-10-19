@@ -1,0 +1,141 @@
+{
+  "product": {
+    "rich_media_accel": {
+      "description": "",
+      "name": "Rich Media Accelerator"
+    },
+    "spm": {
+      "name": "Ion Premier"
+    },
+    "addfiledowldprpty": {
+      "name": "Config Manager : File Downloads",
+      "description": "Creates a new File Downloads property using the legacy Config Manager application."
+    },
+    "kdd": {
+      "name": "Kona DDoS Defender",
+      "description": ""
+    },
+    "fresca": {
+      "name": "Ion Standard"
+    },
+    "site_accel": {
+      "name": "Dynamic Site Accelerator",
+      "description": ""
+    },
+    "progressive_media": {
+      "description": {
+        "html": ""
+      },
+      "name": "Progressive Media Downloads"
+    },
+    "site_del": {
+      "name": "Dynamic Site Delivery(Legacy)",
+      "description": ""
+    },
+    "webap": {
+      "name": "Web Application Protector",
+      "description": ""
+    },
+    "addlivemediaprpty": {
+      "name": "Media Services Live",
+      "description": "Creates a new Media Services Live property."
+    },
+    "aqua_mobile": {
+      "name": "Aqua Mobile",
+      "description": ""
+    },
+    "adaptive_media_delivery": {
+      "name": "Adaptive Media Delivery",
+      "description": ""
+    },
+    "edge_connect_message_store": {
+      "description": "",
+      "name": "Edge Connect Message Store"
+    },
+    "http_content_del": {
+      "description": "",
+      "name": "HTTP Content Delivery"
+    },
+    "addsiteprpty": {
+      "name": "Config Manager : Site",
+      "description": "Creates a new Site property using the legacy Config Manager application."
+    },
+    "obj_delivery": {
+      "description": "",
+      "name": "Object Delivery"
+    },
+    "download_delivery": {
+      "name": "Download Delivery",
+      "description": ""
+    },
+    "iot": {
+      "description": "",
+      "name": "IoT"
+    },
+    "enterprise": {
+      "name": "Enterprise Application Access",
+      "description": ""
+    },
+    "edgeconnect": {
+      "name": "Cloud Monitor Data Delivery",
+      "description": ""
+    },
+    "security_failover": {
+      "name": "Cloud Security Failover",
+      "description": ""
+    },
+    "dcp": {
+      "name": "IoT Edge Connect",
+      "description": ""
+    },
+    "rm": {
+      "name": "Ion Media Advanced"
+    },
+    "web_app_accel": {
+      "description": "",
+      "name": "Web Application Accelerator"
+    },
+    "addondemandprpty": {
+      "name": "Media Services On Demand",
+      "description": "Creates a new Media Services On Demand property."
+    },
+    "alta": {
+      "description": "",
+      "name": "Terra Alta Enterprise Accelerator"
+    },
+    "site_defender": {
+      "description": "",
+      "name": "Kona Site Defender"
+    },
+    "fina": {
+      "name": "Ion Express"
+    },
+    "dynamic_site_del": {
+      "name": "Dynamic Site Delivery",
+      "description": ""
+    },
+    "api_accel": {
+      "name": "API Acceleration",
+      "description": ""
+    },
+    "http_downloads": {
+      "description": "",
+      "name": "HTTP Downloads"
+    },
+    "mobile_accel": {
+      "description": "",
+      "name": "Mobile Accelerator"
+    },
+    "addapplprpty": {
+      "name": "Config Manager : Application",
+      "description": "Creates a new Application property using the legacy Config Manager application."
+    },
+    "obj_caching": {
+      "name": "Object Caching",
+      "description": ""
+    },
+    "wholesale_delivery": {
+      "name": "Wholesale Delivery"
+    }
+  }
+}
