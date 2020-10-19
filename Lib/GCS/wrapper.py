@@ -373,17 +373,9 @@ class Wrapper:
 					result = self.checkIfCDN(str(a))
 		# TODO: Be more specific
 		except BaseException as e:
-			# print(str(e))
+
 			result = "Unknown"
-			# try: 
-			# 	for a in dns.resolver.query(dnsRecord, 'A'):
-			# 		# print(a)
-			# 		resp = self.httpCaller.getResult('/diagnostic-tools/v2/ip-addresses/'+str(a)+'/is-cdn-ip')
-			# 		if 'isCdnIp' in resp and resp['isCdnIp']==True:
-			# 			result = True
-			# 			break
-			# except BaseException as e:
-			# 	return False
+
 		return result
 	@functools.lru_cache()
 	def checkSlot(self,dnsRecord):
@@ -413,11 +405,7 @@ class Wrapper:
 				A boolean flag based on whether the call returns a true or a false.
 		"""
 		result = False
-		# don't use the Akamai service. It is impossibly slow.
-		#replaced it with simple reverse lookup
-		#resp = self.httpCaller.getResult('/diagnostic-tools/v2/ip-addresses/'+ipaddress+'/is-cdn-ip')
-		#if 'isCdnIp' in resp and resp['isCdnIp']==True:
-		#	result = True		
+
 
 		try:
 			if os.name =="nt":

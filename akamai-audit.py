@@ -47,7 +47,6 @@ class Aggregator:
 		self.startDate = None
 		self.endDate = None
 		self.accountName = None
-		# self.products = pd.DataFrame(columns=["Product_ID", "Product_Name"])
 		self.productMap = None
 		signal.signal(signal.SIGINT, self.signal_handler)
 
@@ -65,7 +64,6 @@ class Aggregator:
 			return True
 		except ValueError:
 			return False
-			# raise ValueError("Incorrect data format, should be YYYY-MM-DD")
 	def createFolder(self,accountName):
 		self.outputdir = 'Reports'
 		# Create Audit Folder
@@ -96,7 +94,6 @@ class Aggregator:
 					'Product_ID':product['productId'],
 					'Product_Name':product['productName']
 					}
-				# self.products = self.products.append(new_row, ignore_index=True)
 		if len(productNames) > 1:
 			return ",".join(productNames)
 		else:
@@ -153,7 +150,6 @@ class Aggregator:
 		self.presentation()	
 		self.log.info("Writing Files...")
 		self._writeFiles()
-		# self.clear_cache()
 		self.log.info("Execution Completed, output can be found here:'Reports/{0}/'".format(self.accountName))
 
 	def printContracts(self):
@@ -781,11 +777,9 @@ class Aggregator:
 		dat['Resource_Path'] = dat['Group_ID'].apply(self._resource_path)
 		
 		dat = dat.rename(columns={"Product": "Product_ID"})
-		# dat['Product'] = dat.apply(lambda x: self._getProductName(x.Contract_ID, x.Product_ID), axis=1)
 		dat['Product'] = dat['Product_ID'].apply(self._translateProductID)
 		
-		# df['Offloadhits'] = df.apply(lambda x: self._getoffloadHits(x.allEdgeHits, x.allHitsOffload), axis=1)
-		# dat['Product']
+
 		dat = dat[['Host_Name','Defined_CNAMED', 'Actual_CNAME', 'Secure','Slot', 'Akamaized', 'Group_ID','Resource_Path', 'Contract_ID', 'Config_Name', 'Property_ID',  'Product_ID', 'Product', 'Prod_Version', 'Staging_Version', 'AppSec_Config_Name', 'AppSec_Config_ID', 'AppSec_Type', 'AppSec_Target_Product', 'AppSec_Production_Version', 'AppSec_Policy', 'AppSec_Target_Product']]
 		
 		self.dfs['ByHost'] = dat
@@ -805,7 +799,6 @@ class Aggregator:
 
 	def clear_cache(self):
 		self._resource_path.cache_clear()
-		# self._translateProductID.fget.clear_cache()
 		self.wrapper.clear_cache()
 		
 
@@ -858,19 +851,12 @@ class Aggregator:
 
 		if cpcode in lst_reviewed_cpcodes:
 			return False
-		
-		
-
-		# df = r.offload(cpcode)
-
 		self.log.info("Gathering offload data for CPcode:'{0}'".format(cpcode))
 		lst_reviewed_cpcodes.append(cpcode)
-		# w = Wrapper()
-		# w.account = self.Aggregator.wrapper.account 
 
 		results = (self.wrapper.reporting(cpcode,self.startDate,self.endDate,rtype))
 		
-		# print(results)
+
 		df = pd.DataFrame(results['data'])
 
 		df['CPCODE'] = cpcode
@@ -1052,17 +1038,6 @@ if __name__=="__main__":
 						parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
 
 
-
-		# elif args['type'] == 'test':
-		# 	# obj_agg.printContracts()
-		# 	# # print(obj_agg._getProductName('SPM'.lower()))
-		# 	# # obj_agg._getProductName.cache_clear()
-		# 	# obj_agg.clear_cache()
-		# 	# obj_agg.wrapper.clear_cache()
-		# 	if obj_agg.validateDate(args['start']):
-		# 		pass
-		# 	else:
-		# 		parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
 	obj_agg.clear_cache()
 
 
