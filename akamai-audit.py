@@ -1,5 +1,5 @@
 
-import argparse, time, os,csv,functools, signal,sys, json
+import argparse, time,re, os,csv,functools, signal,sys, json
 import logging,datetime, threading,concurrent.futures
 from logging import handlers
 from time import gmtime, strftime
@@ -16,19 +16,27 @@ def ArgsParser():
 	
 	parser = argparse.ArgumentParser(description='',formatter_class=argparse.RawTextHelpFormatter)
 	parser.add_argument('--account-key', type=str, help='Account_ID to Query for multi account management (switch key)',
-		required=True)
-	parser.add_argument("--verbose", action='store_true', help='Turn on Verbose Mode.')
-	parser.add_argument('--section',  type=str, help='EdgeRc section to be used.', required=False,default='papi')  
-	parser.add_argument('--type', type=str, choices=['as','os'], help='Type of report to be done [account-summary,offload]]',
-                    required=False,default='as')
+		required=False)
+	parser.add_argument('--verbose', action='store_true', help='Turn on Verbose Mode.')
+	parser.add_argument('--section',  type=str, help='EdgeRc section to be used.', 
+		required=False,default='papi')  
+	parser.add_argument('--type', type=str, choices=['as','os','har'], help='Type of report to be done [account-summary,offload,http-archive]]',
+        required=False,default='as')
 	parser.add_argument('--cpcodes', nargs='+', type=int, help='List of cpcodes to query.',
-                    required=False)
+        required=False)
 	parser.add_argument('--start', type=str, help='Report Start date in format YYYY-MM-DD", if not provided default is start of last month.',
 		required=False)
 	parser.add_argument('--end', type=str, help='Report Start date in format YYYY-MM-DD", if not provided default is start of last month.',
 		required=False)
+	parser.add_argument('--domain', type=str, help='', 
+		required=False)
+	parser.add_argument('--first-parties', nargs='+', type=str, help='', 
+		required=False)
+	parser.add_argument('--file', type=str, help='',
+		required=False)
 	args = vars(parser.parse_args())
 	return parser, args
+
 class Aggregator:
    	
 	def __init__(self,console,args):
@@ -47,24 +55,42 @@ class Aggregator:
 		self.startDate = None
 		self.endDate = None
 		self.accountName = None
+
 		self.productMap = None
+		self.reportType = "as"
 		signal.signal(signal.SIGINT, self.signal_handler)
 
-	#TODO Move outside of class	
-
-	#TODO: Put outside of class
 	def signal_handler(self,sig, frame):
 		self.clear_cache()
 		self.log.critical("Forced Exit... Bye!..")
 		sys.exit(0)	
+	
 	def _validateDate(self, date):
+		"""Returns False if input date does not follow YYYY-MM-DD.
 
+			Keyword arguments:
+				date
+
+			Return type:
+				Boolean
+		"""
 		try:
 			datetime.datetime.strptime(str(date), '%Y-%m-%d')
 			return True
 		except ValueError:
 			return False
-	def createFolder(self,accountName):
+			# raise ValueError("Incorrect data format, should be YYYY-MM-DD")
+
+	def createFolder(self,directoryName):
+		"""Creates directores to store outputs, takes the directory name. This value most of the time will be the 
+			account Name.
+
+			Keyword arguments:
+				directoryName
+
+			Return type:
+				None
+		"""
 		self.outputdir = 'Reports'
 		# Create Audit Folder
 		try:
@@ -72,7 +98,7 @@ class Aggregator:
 		except:
 			os.mkdir(self.outputdir)
 
-		self.outputdir = self.outputdir+'/'+accountName.replace(' ','_')+'/'
+		self.outputdir = self.outputdir+'/'+directoryName.replace(' ','_')+'/'
 		# Create Account Folder under Audit
 		try:
 			os.stat(self.outputdir)
@@ -82,7 +108,13 @@ class Aggregator:
 
 	def _getProducts(self, contractId):
 		"""
-		Return the set of products within a contract as a comma seperated list
+			Return the set of products within a contract as a comma seperated list
+			
+			Keyword arguments:
+					contractId
+
+			Return type:
+				list
 		"""
 
 		products = self.wrapper.getProducts(contractId)		
@@ -94,6 +126,7 @@ class Aggregator:
 					'Product_ID':product['productId'],
 					'Product_Name':product['productName']
 					}
+
 		if len(productNames) > 1:
 			return ",".join(productNames)
 		else:
@@ -101,11 +134,15 @@ class Aggregator:
 
 	def getAccountDetails(self):
 		"""
-		Gets a holistic view of the account.
-		Print the Account details, Contracts and Groups as one spread sheet
+			Gets Account Name from ID, also saves the groups for later functions.	
+			Keyword arguments:
+					None
+
+			Return type:
+				Boolean, but also stores dataframe in self.dfs
 		"""
 
-		#also save the groups for later functions
+		
 		self.groups = self.wrapper.getGroups()
 
 		if 'incidentId' in self.groups:
@@ -128,9 +165,17 @@ class Aggregator:
 		return True
 
 	def accountSummary(self):
+		"""
+			Main function for AS report type, orchestrates function execution.
+
+			Keyword arguments:
+					None
+
+			Return type:
+				None
+		"""
 		self.log.info("Creating the Contract summary table")
 		self.printContracts()
-		# self.products()
 		self.log.info("Creating the Groups summary table")
 		self.printGroups()
 		self.log.info("Creating the CP_Code summary table")
@@ -150,9 +195,19 @@ class Aggregator:
 		self.presentation()	
 		self.log.info("Writing Files...")
 		self._writeFiles()
-		self.log.info("Execution Completed, output can be found here:'Reports/{0}/'".format(self.accountName))
+
+		self.log.info("Report successfull, output can be found here:'Reports/{0}/'".format(self.accountName))
 
 	def printContracts(self):
+		"""
+			Gets Contracts within Account
+			
+			Keyword arguments:
+					None
+
+			Return type:
+				None, but stores dataframe in self.dfs
+		"""
 		self.log.info("Creating the Contracts table.")
 		columns = ["Contract_ID" , "Contract_Name", "Products"]
 		df_ctr= pd.DataFrame(columns=columns)
@@ -166,25 +221,27 @@ class Aggregator:
 				'Products':products
 			}
 			df_ctr=df_ctr.append(new_row, ignore_index=True)
-			
-		
 		self.dfs['contracts'] = df_ctr
 
-		
-
 	def printGroups(self):	
+		"""
+			Gets Groups in account
+
+			Keyword arguments:
+					None
+
+			Return type:
+				None, but stores dataframe in self.dfs
+		"""
 		self.log.info("Creating the Groups table.")
 		columns = ["Group_ID", "Group_Name","Parent"]
 		df_grp = pd.DataFrame(columns=columns)
-		
 		for group in self.groups['groups']['items']:
-			
 			grp_id = int(group['groupId'][4:])
 			grp_name = group['groupName']
 			grp_parent = None
 			if 'parentGroupId' in group:
 				grp_parent = int(group['parentGroupId'][4:])
-			
 			
 			new_row = {
 				'Group_ID': grp_id,
@@ -193,13 +250,18 @@ class Aggregator:
 			}
 			
 			df_grp=df_grp.append(new_row, ignore_index=True)
-	
-		
 		self.dfs['groups'] = df_grp
 
-		
-	
 	def printEdgeHostNames(self):
+		"""
+			Gets EdgeHostnames in account
+
+			Keyword arguments:
+					None
+
+			Return type:
+				None, but stores dataframe in self.dfs
+		"""
 		lst_eh = []
 		columns = ["Group_ID", "Contract_ID", "Edge_Host_ID", "Edge_Host_Name", "Edge_Host_Domain_Suffix", "Secure", "IPVersion","Product_ID","Map","Slot"]
 		df_eh = pd.DataFrame(columns=columns)
@@ -213,10 +275,19 @@ class Aggregator:
 		self.dfs['edgehostnames'] = df_eh	
 							
 	def PropertyWorker(self,list_grp_configs,list_grp_behaviors,config_details):
+		"""
+			Gets Property details, 
 
+			Keyword arguments:
+					list_grp_configs
+					list_grp_behaviors
+					config_details
+
+			Return type:
+				None, but stores dataframe in self.dfs
+		"""
 		args = None
 		args = ['Prod_Version','Staging_Version', 'Latest_Version']
-
 		if 'propertyName' in config_details:
 			self.log.debug("Importing data for property: '{0}'".format(config_details['propertyName']))
 
@@ -227,67 +298,51 @@ class Aggregator:
 			productionVersion = config_details['productionVersion']
 			stgVersion = config_details['stagingVersion']
 			latestVersion = config_details['latestVersion']
-
 			productId = None
-
 			new_row = {
 				'Config_Name': config_details['propertyName'],
 				'Group_ID': int(groupId[4:]), 
-		
 				'Contract_ID': contractId[4:], 
 				'Property_ID': int(propertyId[4:]), 
 				'Prod_Version': productionVersion, 
 				'Staging_Version': stgVersion, 
 				'Latest_Version': latestVersion,			
 				'Product': productId
-				}
-						
+				}					
 			if args:
 				for config_env in args:
 					config_version = new_row[config_env]
-					if config_version is not None:		
-											
+					if config_version is not None:							
 						get_version = self.wrapper.getVersionDetails(propertyId,groupId,contractId,str(config_version))										
 						if 'versions' in get_version:
 							for item in get_version['versions']['items']:
 								new_row[config_env + '_Updated_User'] = item['updatedByUser']
 								new_row[config_env + '_Updated_Time'] = item['updatedDate']
-
 								if productId == None:
 									productId = item['productId'][4:]
-
 					else:
 						new_row[config_env + '_Updated_User'] = 'No_' + config_env
 						new_row[config_env + '_Updated_Time'] = 'No_' + config_env	
-		
 			new_row['Product'] = productId
-		
 			version = new_row['Latest_Version']
-
 			if ('Prod_Version' in new_row) and (new_row['Prod_Version'] is not None):
 				version = new_row['Prod_Version']
 			else:
 				if ('Staging_Version' in new_row) and (new_row['Staging_Version'] is not None):
-					version = new_row['Staging_Version']
-
-			
+					version = new_row['Staging_Version']	
 			new_row['Hostnames'] = self.getPropertyHostDetails(new_row['Group_ID'],new_row['Contract_ID'],new_row['Property_ID'], str(version))
 			new_row['Origins'] = self.getPropertyOriginDetails(new_row['Group_ID'],new_row['Contract_ID'],new_row['Property_ID'], str(version))
-			
 			new_row['Behaviors'] = self.getBehaviorDetails()
 			new_row['CP_Codes'] = '['+self.getCPCodeDetails()+']'
 			property_behaviors = new_row['Behaviors']
 			list_grp_configs.append(new_row)
-		
 			if productionVersion is not None:
 				propertyVersion = productionVersion
 			elif stgVersion is not None:
 				propertyVersion = stgVersion 
 			else :
 				propertyVersion = latestVersion
-			available_behaviors = self.wrapper.getavailableBehavior(propertyId, str(propertyVersion),contractId,  groupId)
-			
-			
+			available_behaviors = self.wrapper.getavailableBehavior(propertyId, str(propertyVersion),contractId,  groupId)			
 			if 'behaviors' in available_behaviors:
 				
 				for b in available_behaviors['behaviors']['items']:
@@ -300,14 +355,25 @@ class Aggregator:
 					'Config_Name': config_details['propertyName'],
 					'Behaviors': b['name'], 
 					'Enabled': enabled
-					# 'More_Information': 'More info to be added'
 					}
 					list_grp_behaviors.append(new_row)
 
 		return
 	
 	def GroupsWorker(self, workType,group,main_list=None,second_list=None):
+		"""
+			Worker for multithreads for property functions, cpcode functions, edgehosts due to high number of groups per 
+			account,
 
+			Keyword arguments:
+					workType 	<= Type of function to be execute [property, cpcode , edgehosts]
+					group		<= Dataframe containing list of account groups
+					main_list 	<= list passed down by maint thread to append results
+					second_list	<= secondary list passed down by main thread to append results
+
+			Return type:
+				None
+		"""
 		groupId = group['groupId']
 
 		if 'contractIds' in group:	
@@ -376,9 +442,19 @@ class Aggregator:
 
 					
 		self.log.debug("Fetched configs for group: '{0}'".format(groupId[4:]))
-		return
+		return None
 
 	def printCPcodes(self):
+		"""
+			orchestrates mutlithreading by using the GroupsWorker function to populate CPcode data	
+
+			Keyword arguments:
+					None
+
+			Return type:
+				None
+		"""
+
 		lst_cpcodes = []
 		columns = ["Group_ID", "Contract_ID", "CP_Code_ID", "CP_Code_Name", "CP_Code_Products"]
 		df_cpcodes = pd.DataFrame(columns=columns)
@@ -391,6 +467,13 @@ class Aggregator:
 		self.dfs['cpcodes'] = df_cpcodes	
 
 	def printPropertiesDetails(self, *args):
+		"""
+			orchestrates mutlithreading by using the GroupsWorker function to populate property data
+			
+			Return type:
+				None
+		"""
+
 		self.log.debug('Start time is {0}'.format(strftime("%Y-%m-%d %H:%M:%S", gmtime())))
 		self.log.debug('generating config data.....')
 		columns = [ 
@@ -476,7 +559,17 @@ class Aggregator:
 	
 	@functools.lru_cache()
 	def _resource_path(self,grp_id, grp_path=None):
+		"""
+			Creates a directory like structure groups, to visualize resource location.
+			
 
+			Keyword arguments:
+					grp_id
+					grp_path
+
+			Return type:
+				grp_path	<= Resource Path within Account
+		"""
 		grp_id = int(grp_id)
 		grp_parent = self.groups[self.groups['Group_ID']== grp_id]['Parent'].item()
 		if grp_path == None:
@@ -517,8 +610,18 @@ class Aggregator:
 		self.dfs['hostnames']=df_hosts
 
 	def getPropertyHostDetails(self, groupId, contractId, propertyId, propertyVersion):
-		# for the property, get the host names, origin names and if the host names are CNAMED to Akamai	
+		"""
+			for the property, get the host names, origin names and if the host names are CNAMED to Akamai	
+		
+			Keyword arguments:
+					grp_id
+					contractId
+					propertyId
+					propertyVersion
 
+			Return type:
+				hostnames	
+		"""
 		hostdetailsJSON = self.wrapper.getPropertyHostNames(propertyId, propertyVersion, groupId, contractId)		
 		hostnames = []
 		
@@ -563,7 +666,12 @@ class Aggregator:
 		return hostnames		
 
 	def getPropertyOriginDetails(self, groupId, contractId, propertyId, propertyVersion):
+		"""
+		Finds Origins from property and defines origin Type
 
+		returns
+			origin_details
+		"""
 		self.rules = self.wrapper.getConfigRuleTree(propertyId, propertyVersion, groupId, contractId)
 		self.origin = Origin_Settings()
 		origin_details = self.origin.findOrigins(self.rules)
@@ -628,7 +736,6 @@ class Aggregator:
 	
 		columns = ["Target_ID", "Type", "Config_ID", "Config_Version", "Default_File", "File_Paths", "APIs","Hostnames","Security_Policy", "Sequence"]
 		df_secMatch = pd.DataFrame(columns=columns)
-
 		for mt in matchTargets:
 			for webTarget in mt['matchTargets']['websiteTargets']: 
 				mtype = None
@@ -663,8 +770,6 @@ class Aggregator:
 				}
 				df_secMatch = df_secMatch.append(new_row, ignore_index=True)
 		self.dfs['secMatch'] = df_secMatch
-
-
 		return None
 	
 	def printAppSec(self):
@@ -777,17 +882,131 @@ class Aggregator:
 		dat['Resource_Path'] = dat['Group_ID'].apply(self._resource_path)
 		
 		dat = dat.rename(columns={"Product": "Product_ID"})
+		# dat['Product'] = dat.apply(lambda x: self._getProductName(x.Contract_ID, x.Product_ID), axis=1)
 		dat['Product'] = dat['Product_ID'].apply(self._translateProductID)
 		
-
+		# df['Offloadhits'] = df.apply(lambda x: self._getoffloadHits(x.allEdgeHits, x.allHitsOffload), axis=1)
+		# dat['Product']
 		dat = dat[['Host_Name','Defined_CNAMED', 'Actual_CNAME', 'Secure','Slot', 'Akamaized', 'Group_ID','Resource_Path', 'Contract_ID', 'Config_Name', 'Property_ID',  'Product_ID', 'Product', 'Prod_Version', 'Staging_Version', 'AppSec_Config_Name', 'AppSec_Config_ID', 'AppSec_Type', 'AppSec_Target_Product', 'AppSec_Production_Version', 'AppSec_Policy', 'AppSec_Target_Product']]
 		
 		self.dfs['ByHost'] = dat
+	
 	def _readProductMap(self):
 		if self.productMap is None:
 			with open('Lib/GCS/productMap.json') as f:
 				self.productMap  = json.load(f)
 
+	def mineHar(self,har,lst_firstparty):
+		colmms = ['url','host','host-type','protocol','method','status','ext','cpcode','ttl','server','cdn-cache','cdn-cache-parent','cdn-cache-key','cdn-req-id','vary','appOrigin','content-length','content-length-origin','blocked','dns','ssl','connect','send','ttfb','receive','edgeTime','originTime'
+		]
+		dat_clean = pd.DataFrame(columns=colmms)
+		for r in har['log']['entries']:
+			u = str(r['request']['url']).split('?')[0]
+			host = re.search('://(.+?)/', u, re.IGNORECASE).group(0).replace(':','').replace('/','')
+			cachekey = str(self._findHeader(r,'response','x-cache-key','eq'))
+			if not cachekey == 'None':
+				cachekey = cachekey.split('/')
+				cpcode = int(cachekey[3])
+				ttl = cachekey[4]
+				cdnCache = str(self._findHeader(r,'response','x-cache','eq')).split(' ')[0]
+				cdnCacheParent = str(self._findHeader(r,'response','x-cache-remote','eq')).split(' ')[0]
+				origin = str(self._findHeader(r,'response','x-cache-key','eq')).split('/')[5]
+			else:
+				cachekey = "None"
+				cpcode = "None"
+				ttl = "None"
+				cdnCache = "None"
+				cdnCacheParent = "None"
+				origin = "None"
+
+			ext = re.search(r'(\.[A-Za-z0-9]+$)', u, re.IGNORECASE)
+			if any(tld in host for tld in lst_firstparty):
+				hostType = 'First Party'
+				edgeTime = self._findHeader(r,'cdn-timing','edge','eq')
+				originTime = self._findHeader(r,'cdn-timing','origin','eq')
+			else:
+				hostType = 'Third Party'
+				edgeTime = -1
+				originTime = -1
+
+			if ext is None:
+				ext = "None"
+			else:
+				ext = ext.group(0).replace('.','') 
+			ct = self._findHeader(r,'response','content-length','eq')
+			if ct == "None":
+				ct = 0
+			else:
+				ct = int(ct)
+			if ext in ['jpg','png']:
+				ct_origin = self._findHeader(r,'response','x-im-original-size','eq')
+			else:
+				ct_origin = self._findHeader(r,'response','x-akamai-ro-origin-size','eq')
+			if ct_origin == "None":
+				ct_origin = 0
+			else:
+				ct_origin = int(ct_origin)
+			new_row = {
+				'url':u,
+				'host':host,
+				'host-type':hostType,
+				'protocol':r['request']['httpVersion'],
+				'method':r['request']['method'],
+				'status':r['response']['status'],
+				'ext':ext,
+				'cpcode':cpcode,
+				'ttl':ttl,
+				'server':str(self._findHeader(r,'response','server','eq')),
+				'cdn-cache':cdnCache,
+				'cdn-cache-parent':cdnCacheParent,
+				'cdn-cache-key':str(self._findHeader(r,'response','x-true-cache-key','eq')),
+				'cdn-req-id':str(self._findHeader(r,'response','x-akamai-request-id','eq')),
+				'vary':str(self._findHeader(r,'response','vary','eq')),
+				'appOrigin':origin,
+				'content-length':ct,
+				'content-length-origin':ct_origin,
+				'blocked':r['timings']['blocked'],
+				'dns':r['timings']['dns'],
+				'ssl':r['timings']['ssl'],
+				'connect':r['timings']['connect'],
+				'send':r['timings']['send'],
+				'ttfb':r['timings']['wait'],
+				'receive':r['timings']['receive'],
+				'edgeTime':edgeTime,
+				'originTime':originTime
+				
+				}
+			dat_clean = dat_clean.append(new_row,ignore_index=True)
+		dat_clean = dat_clean.groupby(colmms).size().reset_index(name='Count')   
+		self.dfs['har'] = dat_clean
+		return True
+
+	def _findHeader(self,req,headertype,headername,op = None):
+
+		value = "None"
+		if headertype == 'response':
+			for h in req['response']['headers']:
+				if op == 'in':
+					if headername in h['name'].lower():
+						value = h['value']
+						break
+				else:
+					if headername == h['name'].lower():
+						value = h['value']
+						
+						break
+		if headertype == 'cdn-timing':
+			value = 0
+			for h in req['response']['headers']:
+				if op == 'eq':
+					if 'server-timing' in h['name'].lower():
+						if headername in h['value'].lower():
+							
+							value = int(h['value'].split(';')[1].split('=')[1])
+							break
+			if value is None:
+				return 0
+		return value
 
 	def _translateProductID(self,productID):
 
@@ -799,8 +1018,7 @@ class Aggregator:
 
 	def clear_cache(self):
 		self._resource_path.cache_clear()
-		self.wrapper.clear_cache()
-		
+		self.wrapper.clear_cache()	
 
 	def getBehaviorDetails(self):
 		return ( self.origin.findOrigins(self.rules, 'behaviors') )
@@ -827,56 +1045,47 @@ class Aggregator:
 		return self.wrapper.getAppSecMatchTargets(configID,version)
 
 	def _writeFiles(self):
-		
-		with pd.ExcelWriter(self.outputdir+'Summary.xlsx') as writer:  
-			self.dfs['ByHost'].to_excel(writer, sheet_name='Host Summary', index=False)
-			#self.dfs['account'].to_excel(writer, sheet_name='account', index=False)
-			self.dfs['contracts'].to_excel(writer, sheet_name='contracts', index=False)
-			self.dfs['groups'].to_excel(writer, sheet_name='groups', index=False)
-			self.dfs['cpcodes'].to_excel(writer, sheet_name='cpcodes', index=False)
-			self.dfs['hostnames'].to_excel(writer, sheet_name='hostnames', index=False)
-			self.dfs['certs'].to_excel(writer, sheet_name='certs', index=False)
-			self.dfs['edgehostnames'].to_excel(writer, sheet_name='edgehostnames', index=False)
-			self.dfs['properties'].to_excel(writer, sheet_name='properties', index=False)
-			self.dfs['propertiesBehaviors'].to_excel(writer, sheet_name='propertiesBehaviors', index=False)
-			self.dfs['origins'].to_excel(writer, sheet_name='origins', index=False)
-			self.dfs['secConfigs'].to_excel(writer, sheet_name='secConfigs', index=False)
-			self.dfs['secMatch'].to_excel(writer, sheet_name='secMatch', index=False)
-			self.dfs['secConfigByHost'].to_excel(writer, sheet_name='secConfigByHost', index=False)			
-		return
+		try:
+			if self.reportType == 'as':
+				with pd.ExcelWriter(self.outputdir+'Summary.xlsx') as writer:  
+					self.dfs['ByHost'].to_excel(writer, sheet_name='Host Summary', index=False)
+					self.dfs['contracts'].to_excel(writer, sheet_name='contracts', index=False)
+					self.dfs['groups'].to_excel(writer, sheet_name='groups', index=False)
+					self.dfs['cpcodes'].to_excel(writer, sheet_name='cpcodes', index=False)
+					self.dfs['hostnames'].to_excel(writer, sheet_name='hostnames', index=False)
+					self.dfs['certs'].to_excel(writer, sheet_name='certs', index=False)
+					self.dfs['edgehostnames'].to_excel(writer, sheet_name='edgehostnames', index=False)
+					self.dfs['properties'].to_excel(writer, sheet_name='properties', index=False)
+					self.dfs['propertiesBehaviors'].to_excel(writer, sheet_name='propertiesBehaviors', index=False)
+					self.dfs['origins'].to_excel(writer, sheet_name='origins', index=False)
+					self.dfs['secConfigs'].to_excel(writer, sheet_name='secConfigs', index=False)
+					self.dfs['secMatch'].to_excel(writer, sheet_name='secMatch', index=False)
+					self.dfs['secConfigByHost'].to_excel(writer, sheet_name='secConfigByHost', index=False)			
+			elif self.reportType == 'har':
+				with pd.ExcelWriter(self.outputdir+'HAR-Summary.xlsx') as writer:  
+					self.dfs['har'].to_excel(writer, sheet_name='Request Details', index=False)
+		except:
+			return False
+		return True
 
 	# [START] ACC Reporting API: Offload
 	def _ReportingWorker(self,cpcode,rtype,lst_reviewed_cpcodes,lst_reviewed_cpcodes_df):
-
-
 		if cpcode in lst_reviewed_cpcodes:
 			return False
 		self.log.info("Gathering offload data for CPcode:'{0}'".format(cpcode))
 		lst_reviewed_cpcodes.append(cpcode)
-
 		results = (self.wrapper.reporting(cpcode,self.startDate,self.endDate,rtype))
-		
-
 		df = pd.DataFrame(results['data'])
-
 		df['CPCODE'] = cpcode
 		if len(df.index) <= 0:
-	
 			return None
-
-		
 		df = df.astype({"allEdgeHits": int, "allHitsOffload": float})
-		
 		df['ext'] = df['hostname.url'].apply(self._getUrlExt)
-
 		df = df.groupby('ext')[["allEdgeHits","allHitsOffload"]].agg({'allEdgeHits':'sum','allHitsOffload':'mean'}).reset_index().sort_values(['allEdgeHits'], ascending=False)
 		df['Offloadhits'] = df.apply(lambda x: self._getoffloadHits(x.allEdgeHits, x.allHitsOffload), axis=1)
-
-		df['perc'] = round(df['allEdgeHits']/df['allEdgeHits'].sum()*100,2)
+		df['TrafficPercentage'] = round(df['allEdgeHits']/df['allEdgeHits'].sum()*100,2)
 		df['CPCODE'] = cpcode
-
-		df = df.reset_index(drop=True).sort_values(['perc'], ascending=False)
-
+		df = df.reset_index(drop=True).sort_values(['TrafficPercentage'], ascending=False)
 		if df is None:
 			self.log.info("No Data found for CPcode: '{0}'".format(cpcode))
 		else:
@@ -893,10 +1102,11 @@ class Aggregator:
 			for df in lst_reviewed_cpcodes_df:
 				if int(df['CPCODE'][0]) == int(row['CPCODE']):
 					df.rename(columns={'allHitsOffload':'Offload'}, inplace=True)
-					df[['ext','allEdgeHits','Offloadhits','Offload','perc']].to_excel(writer, sheet_name='{0}'.format(df['CPCODE'].iloc[0]),engine='xlsxwriter',index=False)
+					df[['ext','allEdgeHits','Offloadhits','Offload','TrafficPercentage']].to_excel(writer, sheet_name='{0}'.format(df['CPCODE'].iloc[0]),engine='xlsxwriter',index=False)
 		writer.save()
 	
 		return
+	
 	def _enforceformat(self,dateString):
 
 		dateString = dateString.split('-')
@@ -913,8 +1123,6 @@ class Aggregator:
 	def print_offload(self,lst_cpcodes=None,start=None,end=None):
 
 		if lst_cpcodes is None:
-			
-
 			self.printCPcodes()
 			lst_cpcodes = self.dfs['cpcodes']['CP_Code_ID']
 		sheets = False
@@ -944,20 +1152,21 @@ class Aggregator:
 
 		if len(lst_reviewed_cpcodes_df) > 0:
 			self._writeReport(lst_reviewed_cpcodes_df)     
-			self.log.info("Done Gathering offload data, output can be found here'{0}'".format(self.outputdir+'Offload.xlsx'))
+			self.log.info("Report successfull, output can be found here'{0}'".format(self.outputdir+'Offload.xlsx'))
 		else:
-			self.log.info("Done Gathering offload data but no CPcode data found.")
+			self.log.warn("Report unsuccessfull, no CPcode data found.")
 	
 	def _summarize(self,lst):
-		columns = ['ext','allEdgeHits','Offloadhits','allHitsOffload','perc','CPCODE']
+		columns = ['ext','allEdgeHits','Offloadhits','allHitsOffload','TrafficPercentage','CPCODE']
 
 		df = pd.DataFrame(columns=columns)
 		df = df.append(lst, ignore_index=True)
-		del df['perc']
+		del df['TrafficPercentage']
 		del df['allHitsOffload']
 		df = df.groupby('CPCODE')[["allEdgeHits","Offloadhits"]].agg({'allEdgeHits':'sum','Offloadhits':'sum'}).reset_index().sort_values(['allEdgeHits'], ascending=False)
 		df['Offload'] =  round(df['Offloadhits']/df['allEdgeHits'].sum()*100,2)
-		df['perc'] = round((df['allEdgeHits']/df['allEdgeHits'].sum())*100,2)
+		df['TrafficPercentage'] = round((df['allEdgeHits']/df['allEdgeHits'].sum())*100,2)
+
 		return df
 	
 	def _getUrlExt(self,url):
@@ -975,9 +1184,15 @@ class Aggregator:
 	def _getTotalOffload(self,totalhits,totaloffloadhist):
 		return (totaloffloadhist/totalhits)*100
 	
-	# [END] ∂ACC Reporting API: Offload
-
-
+	# [END] ACC Reporting API: Offload
+	def readJson(self,location):
+		if not os.path.isfile(location):
+			return None
+		with open(location, 'r') as f:
+			file = json.loads(f.read())
+			f.close()
+		return file
+		
 if __name__=="__main__":
 	# TODO: remove CP and Group, etc prefix grp_
 
@@ -991,52 +1206,80 @@ if __name__=="__main__":
 		console = ConsoleLogging()
 		console.configure_logging()
 	obj_agg = Aggregator(console,args)
-	
-
-	
-	#TODO create switch based on param --type [Offload, Summary]
-	obj_agg.log.info("Started Audit")
-	obj_agg.log.info("Getting Account Details")
-	
-	obj_agg.log.info("Account ID: {0}".format(args['account_key']))
-
-	if obj_agg.getAccountDetails():
 		
-		if args['type'] == 'as':
-			obj_agg.log.info("Starting Account Summary")
-			obj_agg.accountSummary()
-			obj_agg.clear_cache()
+	
+	if args['type'] != 'har':
+		obj_agg.log.info("Account ID: {0}".format(args['account_key']))
+		if not args['account_key']:
+			parser.error('--account-key has required for operation.')
+		else:
+			obj_agg.log.info("Getting Account Details")
+			if obj_agg.getAccountDetails():	
+				if args['type'] == 'as':
+					obj_agg.reportType = 'as'
+					
+					obj_agg.log.info("Starting Account Summary")
+					obj_agg.accountSummary()
+					obj_agg.clear_cache()
+				elif args['type'] == 'os' :
+					obj_agg.reportType = 'os'
 
-
-		elif args['type'] == 'os' :
-			obj_agg.log.info("Starting Offload Summary")
-			if args['cpcodes']:
-				if not args['start'] and not args['end']:
-					obj_agg.log.info("Performing Analysis for previous month.")
-					obj_agg.print_offload(args['cpcodes'])
-				else:
-					if obj_agg._validateDate(args['start']):
-						if obj_agg._validateDate(args['end']):
-								obj_agg.print_offload(args['cpcodes'],args['start'],args['end'])
+					obj_agg.log.info("Starting Offload Summary")
+					if args['cpcodes']:
+						if not args['start'] and not args['end']:
+							obj_agg.log.info("Performing Analysis for previous month.")
+							obj_agg.print_offload(args['cpcodes'])
 						else:
-							parser.error('--end has incorrect data format, should be YYYY-MM-DD.')
+							if obj_agg._validateDate(args['start']):
+								if obj_agg._validateDate(args['end']):
+										obj_agg.print_offload(args['cpcodes'],args['start'],args['end'])
+								else:
+									parser.error('--end has incorrect data format, should be YYYY-MM-DD.')
+							else:
+								parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
 					else:
-						parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
+						obj_agg.log.info("Performing Account wide Analysis.")
+						
+						if not args['start'] and not args['end']:
+							obj_agg.log.info("Performing Analysis for previous month.")
+							obj_agg.print_offload()
+						else:
+							if obj_agg._validateDate(args['start']):
+								if obj_agg._validateDate(args['end']):
+										obj_agg.print_offload(None,args['start'],args['end'])
+								else:
+									parser.error('--end has incorrect data format, should be YYYY-MM-DD.')
+							else:
+								parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
+	else:
+		if args['type'] == 'har':
+			obj_agg.reportType = 'har'
+			obj_agg.log.info("Starting HTTP-Archive Summary")
+			obj_agg.createFolder("HTTP-Archive")
+			
+			if args['domain']:
+				if args['file']:
+					lst_firstparty = []
+
+					obj_json = obj_agg.readJson(args['file']) 
+					if obj_json is None:
+						obj_agg.log.error("No file found in '{0}'".format(args['file']))
+					else:
+						obj_agg.log.info("HAR file read.")
+						lst_firstparty.append(args['domain'])
+						if args['first_parties']:
+							lst_firstparty = args['first_parties']
+						obj_agg.log.info("Extracting data from HAR.")
+						obj_agg.mineHar(obj_json,lst_firstparty)
+						obj_agg.log.info("Writing Report.")
+						obj_agg._writeFiles()
+						obj_agg.log.info("Report successfull, output can be found here '{0}'".format(obj_agg.outputdir+'HAR-Summary.xlsx'))
+				else:
+					parser.error('--file is needed for file locations.')
+
+				pass
 			else:
-				obj_agg.log.info("Performing Account wide Analysis.")
-				
-				if not args['start'] and not args['end']:
-					obj_agg.log.info("Performing Analysis for previous month.")
-					obj_agg.print_offload()
-				else:
-					if obj_agg._validateDate(args['start']):
-						if obj_agg._validateDate(args['end']):
-								obj_agg.print_offload(None,args['start'],args['end'])
-						else:
-							parser.error('--end has incorrect data format, should be YYYY-MM-DD.')
-					else:
-						parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
-
+				parser.error('--domain is needed for HTTP-Archive.')
 
 	obj_agg.clear_cache()
 

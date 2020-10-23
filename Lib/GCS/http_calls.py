@@ -28,7 +28,7 @@ from random import randint
 from akamai.edgegrid import EdgeGridAuth
 from Lib.GCS.config import EdgeGridConfig
 
-
+# logger = logging.getLogger(__name__)
 
 class EdgeGridHttpCaller():
     def __init__(self, session, debug, verbose, baseurl,log=None):
@@ -106,6 +106,7 @@ class EdgeGridHttpCaller():
             error_string = result[key]["errorString"]
       if error_string:
                     self.log.error("Call caused a server fault.")
+                    # error_msg +=  "ERROR: Please check the problem details for more information:\n"
                     error_msg +=  "Problem details: %s" % error_string
                     self.log.error(error_msg)
     
@@ -116,22 +117,28 @@ class EdgeGridHttpCaller():
         endpoint_result = self.session.post(parse.urljoin(self.baseurl,path), data=body, headers=headers, params=parameters)
         status = endpoint_result.status_code
         
- 
+        # if self.verbose: 
+        # self.log.debug("LOG: POST %s %s %s" % (path,status,endpoint_result.headers["content-type"]))
         if status == 204:
            return {}
-
+        # self.httpErrors(endpoint_result.status_code, path, endpoint_result.json())
+        
+        # if self.verbose: 
+        # self.log.debug(">>>\n" + json.dumps(endpoint_result.json(), indent=2) + "\n<<<\n")
         return endpoint_result.json()
 
     def postFiles(self, endpoint, file):
         path = endpoint
         endpoint_result = self.session.post(parse.urljoin(self.baseurl,path), files=file)
         status = endpoint_result.status_code
-      
+        # if self.verbose: 
+        # self.log.debug("LOG: POST FILES %s %s %s" % (path,status,endpoint_result.headers["content-type"]))
         if status == 204:
            return {}
         self.httpErrors(endpoint_result.status_code, path, endpoint_result.json())
         
-
+        # if self.verbose: 
+        # self.log.debug (">>>\n" + json.dumps(endpoint_result.json(), indent=2) + "\n<<<\n")
         return endpoint_result.json()
     
     def putResult(self, endpoint, body, parameters=None):
@@ -140,17 +147,38 @@ class EdgeGridHttpCaller():
         
         endpoint_result = self.session.put(parse.urljoin(self.baseurl,path), data=body, headers=headers, params=parameters)
         status = endpoint_result.status_code
- 
+        # if self.verbose: 
+        # self.log.debug ("LOG: PUT %s %s %s" % (endpoint,status,endpoint_result.headers["content-type"]))
         if status == 204:
             return {}
-
+        # if self.verbose: 
+        # self.log.debug (">>>\n" + json.dumps(endpoint_result.json(), indent=2) + "\n<<<\n")
         return endpoint_result.json()
     
     def deleteResult(self, endpoint):
         endpoint_result = self.session.delete(parse.urljoin(self.baseurl,endpoint))
         status = endpoint_result.status_code
+        # if self.verbose: 
+        # self.log.debug ("LOG: DELETE %s %s %s" % (endpoint,status,endpoint_result.headers["content-type"]))
         if status == 204:
             return {}
+        # if self.verbose: self.log.debug (">>>\n" + json.dumps(endpoint_result.json(), indent=2) + "\n<<<\n")
         return endpoint_result.json()
 
- 
+    # def configure_logging(self):
+
+    #     logger = logging.getLogger("WRAPPER")
+    #     logger.setLevel(logging.INFO)
+    #     # Format for our loglines
+    #     formatter = logging.Formatter("[%(asctime)s] - %(name)s - %(levelname)s - %(message)s")
+    #     # Setup console logging
+    #     ch = logging.StreamHandler()
+    #     ch.setLevel(logging.INFO)
+    #     ch.setFormatter(formatter)
+    #     logger.addHandler(ch)
+    #   # Setup file logging as well
+    #   # fh = logging.FileHandler(LOG_FILENAME)
+    #   # fh.setLevel(logging.INFO)
+    #   # fh.setFormatter(formatter)
+    #   # logger.addHandler(fh)
+    #     return logger

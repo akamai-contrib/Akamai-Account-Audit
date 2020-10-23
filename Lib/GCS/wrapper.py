@@ -12,7 +12,7 @@ import functools
 
 class Wrapper:
 	"""
-	A simple wrapper for the PAPI calls. Each call maps to a PAPI URL and no tampering of the results is done within the class.
+	A simple wrapper for the API calls. Each call maps to a API URL and no tampering of the results is done within the class.
 	"""
 
 	def __init__(self,log=None): 
@@ -115,7 +115,6 @@ class Wrapper:
 			params = 'accountSwitchKey={0}&groupId={1}&contractId={2}'.format(self.account,groupId,contractId)
 		else:	
 			params = 'groupId={0}&contractId={1}'.format(groupId,contractId)
-			#return self.httpCaller.getResult('/papi/v1/groups/',parameters=params)
 		return self.httpCaller.getResult('/papi/v1/cpcodes/',parameters=params) 
 		
 
@@ -141,8 +140,6 @@ class Wrapper:
 				params = 'accountSwitchKey={0}&groupId={1}&contractId={2}'.format(self.account,groupId,contractId)
 			else:	
 				params = 'groupId={0}&contractId={1}'.format(groupId,contractId)
-
-			#return self.httpCaller.getResult('/papi/v1/groups/',parameters=params)
 		return self.httpCaller.getResult(endpoint,parameters=params) 	
 
 	def getAppSecConfigurations(self):
@@ -351,7 +348,7 @@ class Wrapper:
 					break
 				else:
 					result = self.getCNAMEv2(str(a))
-		# TODO: Be more specific
+	
 		except BaseException as e:
 			result = None
 		if result is not None:
@@ -360,7 +357,6 @@ class Wrapper:
 		return results
 	@functools.lru_cache()
 	def checkIfCDN(self,dnsRecord):
-		# print(dnsRecord)
 		result = False
 		tlds = ["akamai", "edgesuite", "edgekey", "edgestreams","ec9","d4p"]
 		try:
@@ -373,7 +369,7 @@ class Wrapper:
 					result = self.checkIfCDN(str(a))
 		# TODO: Be more specific
 		except BaseException as e:
-
+			# print(str(e))
 			result = "Unknown"
 
 		return result
@@ -405,7 +401,7 @@ class Wrapper:
 				A boolean flag based on whether the call returns a true or a false.
 		"""
 		result = False
-
+		
 
 		try:
 			if os.name =="nt":
@@ -436,14 +432,12 @@ class Wrapper:
 			params = 'accountSwitchKey='+self.account+'&start='+startDate+'T00:00:00Z&end='+endDate+'T00:00:00Z&interval=DAY&objectIds='+str(cpcodes)+'&metrics=allEdgeHits,allHitsOffload'.format(self.account,startDate,endDate,cpcodes)
 		else:	
 			params = 'start={1}T00%3A00%3A00Z&end={2}T00%3A00%3A00Z&interval=DAY&objectIds={2}&metrics=allEdgeHits,allHitsOffload'.format(startDate,endDate,cpcodes)
-		# headers = {'Accept':'text/csv'}
 		return self.httpCaller.getResult('/reporting-api/v1/reports/urlhits-by-url/versions/1/report-data',params)
 	def getProducts(self,contractID):
 		if self.account:
 			params = 'accountSwitchKey={0}&contractId={1}'.format(self.account,contractID)
 		else:	
 			params = 'contractId={1}'.format(contractID)
-		# headers = {'Accept':'text/csv'}
 		return self.httpCaller.getResult('/papi/v1/products',params)
 
 	def clear_cache(self):
@@ -462,18 +456,3 @@ class Wrapper:
 
 if __name__=="__main__":
 	w = Wrapper()
-	#groupdetils =  w.getGroups()
-	#print groupdetils
-	#print w.getContractNames()
-	#cpcodes = getCPCodes(groupdetils)
-	#print cpcodes
-	#edgeHostNames = getEdgeHostNames(groupdetils)
-	#properties = getProperties(groupdetils)
-	#productList = getContractProducts(groupdetils)
-	#print getContractNames()
-	#print w.getProducts('ctr_C-1ED34DY')
-	#print json.dumps(w.getCPCodes('grp_63802','ctr_C-1ED34DY'))
-	#print json.dumps(w.getEdgeHostNames('grp_63802','ctr_C-1ED34DY'))
-	#print (json.dumps(w.getPropertyHostNames('prp_370965','4','grp_63802','ctr_C-1ED34DY')))
-	#print ( w.checkIfCdnIP(w.getIpAddress('www.cnn.com')) )
-	# print ( w.getCNAME('www.example.com') )
