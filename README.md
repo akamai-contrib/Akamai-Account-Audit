@@ -15,24 +15,38 @@ As part of Phase 1, we are targeting only [Propert Manager (PAPI)](https://devel
 pip install -r requirements.txt
 ```
 
-To run the reports, simple issue this command:
-```bash
-python3 akamai-audit.py --account-key {AccountID} 
-```
-
 Depending on the number of configurations you have, this report can take at least 30 minutes to execute. Assume that it'll need about an hour - so ensure that your machine does not sleep during the time to help complete the execution of the script.
 
 
 |Argument| Purpose|
 |---------|--------|
-| --account-key |  Account ID to Audit (only if using accountSwitch, if you have account specific credentials there is no need to add this argument) |
-| --type |  as: Account Summary (default), os: Offload Summary |
-| --verbose |  Print Additional details |
-| --section |  EdgeRc Section  |
+| --type [as\|os] |  [OPTIONAL] as: Account Summary (default), os: Offload Summary |
+| --switchKey |  [OPTIONAL] Allows Akamai employees and some partners to run the code on other accounts they can manage by indicating the Account ID to Audit. Account ID found here: https://control.akamai.com/apps/ids-resources/#/accounts/current |
+| --verbose |  [OPTIONAL] Print Additional details |
+| --section |  [OPTIONAL] Section to use within the .edgerc file  |
 
-### Account Summary
+
+### Account Summary/Snapshot
+```bash
+python3 akamai-audit.py --type as
+```
+
+#### Offload Analysis
+```bash
+python3 akamai-audit.py --type os --groupby ext
+
+```
+#### Har Analysis
+```bash
+python3 akamai-audit.py --type har --file /path/to/file.har --domain
+```
+
+#### Account Summary
+
 When this program is run, it will create a folder within the current directory under the name "Account_Name". Within this folder, following files will be created:
+
 ![](Media/HostSummary.jpg)
+
 
 
 |Sheet Name| Purpose|
@@ -65,11 +79,29 @@ The data collected provides a total summary that provide a quick view on the tot
 
 
 ```bash
-python3 akamai-audit.py --account-key {AccountID} --type os --start 2020-10-01 --end 2020-11-01 --cpcodes 123456 234567 345678
+python3 akamai-audit.py --type os --start 2020-10-01 --end 2020-11-01 --cpcodes 123456 234567 345678
 ```
 
 |Argument| Purpose|
 |---------|--------|
-| --start|  Start Date in format 'YYYY-MM-DD'. |
-| --end |  End Date in format 'YYYY-MM-DD'. |
-| --cpcodes |  List of cpcodes to query (space delimited). |
+| --start|  [OPTIONAL] Start Date in format 'YYYY-MM-DD'. If not provided default is last month's traffic. |
+| --end |  [OPTIONAL] End Date in format 'YYYY-MM-DD'. If not provided default is last month's traffic. |
+| --cpcodes |  [OPTIONAL] List of cpcodes to query (space delimited). If noy provided, account wide analysis will be done. |
+| --groupby [ext\|url] |  [OPTIONAL] By default this report aggregates by URL extension but in many cases like API's we will not have extensions. For those cases we can aggregate by URL's.|
+
+### HTTP-Archive(HAR) Summary
+
+This mode will provide a summary of all the request in the provided HAR file. The if [pragma headers](https://community.akamai.com/customers/s/article/Using-Akamai-Pragma-headers-to-investigate-or-troubleshoot-Akamai-content-delivery?language=en_US) are included in request you will have Akamai specific columns like cachekey, TTL
+
+![](Media/HAR-table.jpg)
+
+Sample Command:
+```bash
+python3 akamai-audit.py  --type har --domain roymartinez.dev --file ~/Desktop/roymartinez.dev.har 
+```
+
+|Argument| Purpose|
+|---------|--------|
+| --file|  [REQUIRED] File location to be analysed. |
+| '--domain |  [REQUIRED] will be appended to this list. If only one domain is in quesion, --domain is all you need. |
+| --first-parties |  [OPTIONAL] List of first party domains --domain will be appended to this list. If only one domain is in quesion, --domain is all you need. Used only in Har Analysis. |

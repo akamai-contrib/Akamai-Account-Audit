@@ -15,12 +15,12 @@ class Wrapper:
 	A simple wrapper for the API calls. Each call maps to a API URL and no tampering of the results is done within the class.
 	"""
 
-	def __init__(self,log=None): 
+	def __init__(self,log=None,section_name="papi"): 
 		self.log = log
 		self.session = requests.Session()
 		self.debug = False
 		self.verbose = False
-		self.section_name = "all"
+		self.section_name = section_name
 		self.account = None
 
 		# If all parameters are set already, use them.  Otherwise
@@ -60,9 +60,6 @@ class Wrapper:
 			params = 'accountSwitchKey={0}'.format(self.account)
 		else:	
 			params = None
-
-		if self.account:
-			params = 'accountSwitchKey={0}'.format(self.account)
 
 		return self.httpCaller.getResult('/papi/v1/groups/',parameters=params)
 		
@@ -299,6 +296,7 @@ class Wrapper:
 		return self.httpCaller.getResult('/papi/v1/properties/{0}/versions/{1}/hostnames/'.format(propertyId,versionNumber),parameters=params)	
 
 	def getEnrollmentHistory(self,enrollementID):
+		params = None
 		if self.account:
 			params = 'accountSwitchKey={0}'.format(self.account)
 		
@@ -427,17 +425,29 @@ class Wrapper:
 		except Exception:
 			pass
 		return result
-	def reporting(self,cpcodes,startDate,endDate, reportType):
+	def reporting(self,rtype,cpcodes,startDate,endDate, reportType):
+		# urlbytes-by-url
+		# urlhits-by-url
+		endpoint = '/reporting-api/v1/reports/{0}/versions/1/report-data'.format(rtype)
+		
+		if rtype == 'urlhits-by-url':
+			metrics = 'allEdgeHits,allOriginHits,allHitsOffload'
+		else:
+			metrics = 'allEdgeBytes,allOriginBytes,allBytesOffload'
+			
 		if self.account:
-			params = 'accountSwitchKey='+self.account+'&start='+startDate+'T00:00:00Z&end='+endDate+'T00:00:00Z&interval=DAY&objectIds='+str(cpcodes)+'&metrics=allEdgeHits,allHitsOffload'.format(self.account,startDate,endDate,cpcodes)
+			params = 'accountSwitchKey='+self.account+'&start='+startDate+'T00:00:00Z&end='+endDate+'T00:00:00Z&interval=DAY&objectIds='+str(cpcodes)+'&metrics='+metrics
 		else:	
-			params = 'start={1}T00%3A00%3A00Z&end={2}T00%3A00%3A00Z&interval=DAY&objectIds={2}&metrics=allEdgeHits,allHitsOffload'.format(startDate,endDate,cpcodes)
-		return self.httpCaller.getResult('/reporting-api/v1/reports/urlhits-by-url/versions/1/report-data',params)
+			params = 'start='+startDate+'T00:00:00Z&end='+endDate+'T00:00:00Z&interval=DAY&objectIds='+str(cpcodes)+'&metrics='+metrics
+
+		return self.httpCaller.getResult(endpoint,params)
+
+
 	def getProducts(self,contractID):
 		if self.account:
 			params = 'accountSwitchKey={0}&contractId={1}'.format(self.account,contractID)
 		else:	
-			params = 'contractId={1}'.format(contractID)
+			params = 'contractId={0}'.format(contractID)
 		return self.httpCaller.getResult('/papi/v1/products',params)
 
 	def clear_cache(self):

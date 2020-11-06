@@ -15,31 +15,34 @@ from Lib.GCS.log import ConsoleLogging
 def ArgsParser():
 	
 	parser = argparse.ArgumentParser(description='',formatter_class=argparse.RawTextHelpFormatter)
-	parser.add_argument('--account-key', type=str, help='Account_ID to Query for multi account management (switch key)',
+	parser.add_argument('--switchKey', type=str, help='Account_ID to Query for multi account management (switch key)',
 		required=False)
 	parser.add_argument('--verbose', action='store_true', help='Turn on Verbose Mode.')
 	parser.add_argument('--section',  type=str, help='EdgeRc section to be used.', 
 		required=False,default='papi')  
-	parser.add_argument('--type', type=str, choices=['as','os','har'], help='Type of report to be done [account-summary,offload,http-archive]]',
+	parser.add_argument('--type', type=str.lower, choices=['as','os','har'], help='Type of report to be done [account-summary,offload,http-archive]]',
         required=False,default='as')
-	parser.add_argument('--cpcodes', nargs='+', type=int, help='List of cpcodes to query.',
+	parser.add_argument('--cpcodes', nargs='+', type=int, help='List of cpcodes to query. Used only in Offload Analysis.',
         required=False)
-	parser.add_argument('--start', type=str, help='Report Start date in format YYYY-MM-DD", if not provided default is start of last month.',
+	parser.add_argument('--start', type=str, help='Report Start date in format YYYY-MM-DD", if not provided default is start of last month. Used only in Offload Analysis.',
 		required=False)
-	parser.add_argument('--end', type=str, help='Report Start date in format YYYY-MM-DD", if not provided default is start of last month.',
+	parser.add_argument('--end', type=str, help='Report Start date in format YYYY-MM-DD", if not provided default is start of last month. Used only in Offload Analysis.',
 		required=False)
-	parser.add_argument('--domain', type=str, help='', 
+	parser.add_argument('--domain', type=str, help='Main Domain to be reviewed in HAR, usually it will be the same as the page view URL. Used only in Har Analysis.', 
 		required=False)
-	parser.add_argument('--first-parties', nargs='+', type=str, help='', 
+	parser.add_argument('--first-parties', nargs='+', type=str, help='List of first party domains --domain will be appended to this list. If only one domain is in quesion, --domain is all you need. Used only in Har Analysis.', 
 		required=False)
-	parser.add_argument('--file', type=str, help='',
+	parser.add_argument('--file', type=str, help='File location to be analysed. Used only in Har Analysis.',
 		required=False)
+	parser.add_argument('--groupby', type=str.lower, choices=['ext','url'], help='Used only in Offload Analysis. ',
+        required=False,default='ext')
+
 	args = vars(parser.parse_args())
 	return parser, args
 
 class Aggregator:
    	
-	def __init__(self,console,args):
+	def __init__(self,console,args,section_name):
 		
 		
 		self.args = None
@@ -48,9 +51,10 @@ class Aggregator:
 		self.outputdir = "None"
 		self.verbose = args['verbose']
 		self.log = console.log
-		self.wrapper = Wrapper(self.log)
-		self.wrapper.account = args['account_key']
-		self.wrapper.section_name = args['section']
+		self.wrapper = Wrapper(self.log,section_name)
+		self.accountId = None
+		self.wrapper.account = None
+
 		self.dfs = {}
 		self.startDate = None
 		self.endDate = None
@@ -58,6 +62,8 @@ class Aggregator:
 
 		self.productMap = None
 		self.reportType = "as"
+		self.groupby = args['groupby']
+
 		signal.signal(signal.SIGINT, self.signal_handler)
 
 	def signal_handler(self,sig, frame):
@@ -143,11 +149,20 @@ class Aggregator:
 		"""
 
 		
+		
+		if args['switchKey']:
+			self.accountId = args['switchKey']
+			self.wrapper.account = args['switchKey']
+		
 		self.groups = self.wrapper.getGroups()
 
 		if 'incidentId' in self.groups:
 			self.log.error('Account Not Found or insufficient privileges to complete the operation. Try "--section sectionName" o change edgerc section')
 			return False
+		if not args['switchKey']:
+			self.accountId = self.groups['accountId'][4:]
+			# self.wrapper.account = self.groups['accountId'][4:]	
+		self.log.info("Account ID: {0}".format(self.accountId))
 		self.accountName = self.groups['accountName']
 		self.log.info("Account Name: {0}".format(self.accountName))
 		csv_file_path = self.createFolder(self.groups['accountName'])
@@ -174,13 +189,13 @@ class Aggregator:
 			Return type:
 				None
 		"""
-		self.log.info("Creating the Contract summary table")
+		self.log.info("Creating Contract summary table")
 		self.printContracts()
-		self.log.info("Creating the Groups summary table")
+		self.log.info("Creating Groups summary table")
 		self.printGroups()
-		self.log.info("Creating the CP_Code summary table")
+		self.log.info("Creating CP_Code summary table")
 		self.printCPcodes()
-		self.log.info("Creating the edge host name summary table")
+		self.log.info("Creating edge host name summary table")
 		self.printEdgeHostNames()
 		self.log.info("Creating Application Security tables")
 		self.printAppSec()
@@ -208,7 +223,7 @@ class Aggregator:
 			Return type:
 				None, but stores dataframe in self.dfs
 		"""
-		self.log.info("Creating the Contracts table.")
+		self.log.info("Creating Contracts table.")
 		columns = ["Contract_ID" , "Contract_Name", "Products"]
 		df_ctr= pd.DataFrame(columns=columns)
 		contracts = self.wrapper.getContractNames()	
@@ -233,7 +248,7 @@ class Aggregator:
 			Return type:
 				None, but stores dataframe in self.dfs
 		"""
-		self.log.info("Creating the Groups table.")
+		self.log.info("Creating Groups table.")
 		columns = ["Group_ID", "Group_Name","Parent"]
 		df_grp = pd.DataFrame(columns=columns)
 		for group in self.groups['groups']['items']:
@@ -882,11 +897,9 @@ class Aggregator:
 		dat['Resource_Path'] = dat['Group_ID'].apply(self._resource_path)
 		
 		dat = dat.rename(columns={"Product": "Product_ID"})
-		# dat['Product'] = dat.apply(lambda x: self._getProductName(x.Contract_ID, x.Product_ID), axis=1)
+
 		dat['Product'] = dat['Product_ID'].apply(self._translateProductID)
-		
-		# df['Offloadhits'] = df.apply(lambda x: self._getoffloadHits(x.allEdgeHits, x.allHitsOffload), axis=1)
-		# dat['Product']
+
 		dat = dat[['Host_Name','Defined_CNAMED', 'Actual_CNAME', 'Secure','Slot', 'Akamaized', 'Group_ID','Resource_Path', 'Contract_ID', 'Config_Name', 'Property_ID',  'Product_ID', 'Product', 'Prod_Version', 'Staging_Version', 'AppSec_Config_Name', 'AppSec_Config_ID', 'AppSec_Type', 'AppSec_Target_Product', 'AppSec_Production_Version', 'AppSec_Policy', 'AppSec_Target_Product']]
 		
 		self.dfs['ByHost'] = dat
@@ -897,7 +910,7 @@ class Aggregator:
 				self.productMap  = json.load(f)
 
 	def mineHar(self,har,lst_firstparty):
-		colmms = ['url','host','host-type','protocol','method','status','ext','cpcode','ttl','server','cdn-cache','cdn-cache-parent','cdn-cache-key','cdn-req-id','vary','appOrigin','content-length','content-length-origin','blocked','dns','ssl','connect','send','ttfb','receive','edgeTime','originTime'
+		colmms = ['url','host','host-type','protocol','method','status','ext','cpcode','ttl','server','cdn-cache','cdn-cache-parent','cdn-cache-key','cdn-req-id','vary','appOrigin','content-length','content-length-origin','transfer-size','blocked','dns','ssl','connect','send','ttfb','receive','edgeTime','originTime'
 		]
 		dat_clean = pd.DataFrame(columns=colmms)
 		for r in har['log']['entries']:
@@ -965,6 +978,7 @@ class Aggregator:
 				'appOrigin':origin,
 				'content-length':ct,
 				'content-length-origin':ct_origin,
+				'transfer-size':r['response']['_transferSize'],
 				'blocked':r['timings']['blocked'],
 				'dns':r['timings']['dns'],
 				'ssl':r['timings']['ssl'],
@@ -1074,35 +1088,47 @@ class Aggregator:
 			return False
 		self.log.info("Gathering offload data for CPcode:'{0}'".format(cpcode))
 		lst_reviewed_cpcodes.append(cpcode)
-		results = (self.wrapper.reporting(cpcode,self.startDate,self.endDate,rtype))
-		df = pd.DataFrame(results['data'])
-		df['CPCODE'] = cpcode
-		if len(df.index) <= 0:
+		resultsHits = (self.wrapper.reporting('urlhits-by-url',cpcode,self.startDate,self.endDate,rtype))
+
+		df_hits = pd.DataFrame(resultsHits['data'])
+		if len(df_hits.index) <= 0:
+			self.log.warning("No Data found for CPcode:'{0}'".format(cpcode))
 			return None
-		df = df.astype({"allEdgeHits": int, "allHitsOffload": float})
-		df['ext'] = df['hostname.url'].apply(self._getUrlExt)
-		df = df.groupby('ext')[["allEdgeHits","allHitsOffload"]].agg({'allEdgeHits':'sum','allHitsOffload':'mean'}).reset_index().sort_values(['allEdgeHits'], ascending=False)
-		df['Offloadhits'] = df.apply(lambda x: self._getoffloadHits(x.allEdgeHits, x.allHitsOffload), axis=1)
-		df['TrafficPercentage'] = round(df['allEdgeHits']/df['allEdgeHits'].sum()*100,2)
-		df['CPCODE'] = cpcode
-		df = df.reset_index(drop=True).sort_values(['TrafficPercentage'], ascending=False)
-		if df is None:
+		resultsbytes = (self.wrapper.reporting('urlbytes-by-url',cpcode,self.startDate,self.endDate,rtype))
+		df_bytes = pd.DataFrame(resultsbytes['data'])
+
+		df_merged= df_hits.merge(df_bytes, on='hostname.url')
+
+		df_merged = df_merged.astype({"allEdgeHits": int,"allOriginHits": int, "allHitsOffload": float,"allEdgeBytes": int, "allOriginBytes": int, "allBytesOffload": float})
+		df_merged[self.groupby] = df_merged['hostname.url'].apply(self._getUrlExt)
+		df_merged = df_merged.groupby(self.groupby)[["allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes","allHitsOffload","allBytesOffload"]].agg({'allEdgeHits':'sum','allOriginHits':'sum','allHitsOffload':'mean','allEdgeBytes':'sum','allOriginBytes':'sum','allBytesOffload':'mean'}).reset_index().sort_values(['allEdgeBytes'], ascending=False)
+
+		df_merged['offloadHits'] = df_merged.apply(lambda x: self._getoffload(x.allEdgeHits, x.allOriginHits), axis=1)
+		df_merged['offloadBytes'] = df_merged.apply(lambda x: self._getoffload(x.allEdgeBytes, x.allOriginBytes), axis=1)
+		
+		df_merged['trafficHitPercentage'] = round(df_merged['allEdgeHits']/df_merged['allEdgeHits'].sum()*100,2)
+		df_merged['trafficBytePercentage'] = round(df_merged['allEdgeBytes']/df_merged['allEdgeBytes'].sum()*100,2)
+
+		df_merged = df_merged.reset_index(drop=True).sort_values(['trafficBytePercentage'], ascending=False)
+		df_merged['CPCODE'] = cpcode
+		if df_merged is None:
 			self.log.info("No Data found for CPcode: '{0}'".format(cpcode))
+			return None
 		else:
-			lst_reviewed_cpcodes_df.append(df)
+			lst_reviewed_cpcodes_df.append(df_merged)
 
 	def _writeReport(self, lst_reviewed_cpcodes_df):
 		writer = pd.ExcelWriter(self.outputdir+'Offload-Summary.xlsx')
-
+		
 		df_summary = self._summarize(lst_reviewed_cpcodes_df)
 		df_summary.to_excel(writer, sheet_name='Summary',engine='xlsxwriter',index=False)
-
 		for index, row in df_summary.iterrows():
 
 			for df in lst_reviewed_cpcodes_df:
 				if int(df['CPCODE'][0]) == int(row['CPCODE']):
 					df.rename(columns={'allHitsOffload':'Offload'}, inplace=True)
-					df[['ext','allEdgeHits','Offloadhits','Offload','TrafficPercentage']].to_excel(writer, sheet_name='{0}'.format(df['CPCODE'].iloc[0]),engine='xlsxwriter',index=False)
+					df[[self.groupby,"allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes",'offloadHits','offloadBytes','trafficHitPercentage','trafficBytePercentage']].to_excel(writer, sheet_name='{0}'.format(df['CPCODE'].iloc[0]),engine='xlsxwriter',index=False)
+					
 		writer.save()
 	
 		return
@@ -1121,7 +1147,7 @@ class Aggregator:
 		return "{0}-{1}-{2}".format(dateString[0],dateString[1],dateString[2])
 		
 	def print_offload(self,lst_cpcodes=None,start=None,end=None):
-
+		
 		if lst_cpcodes is None:
 			self.printCPcodes()
 			lst_cpcodes = self.dfs['cpcodes']['CP_Code_ID']
@@ -1152,20 +1178,27 @@ class Aggregator:
 
 		if len(lst_reviewed_cpcodes_df) > 0:
 			self._writeReport(lst_reviewed_cpcodes_df)     
-			self.log.info("Report successfull, output can be found here'{0}'".format(self.outputdir+'Offload.xlsx'))
+			self.log.info("Report successfull, output can be found here: '{0}'".format(self.outputdir+'Offload.xlsx'))
 		else:
-			self.log.warn("Report unsuccessfull, no CPcode data found.")
+			self.log.warning("Report unsuccessfull, no CPcode data found.")
 	
 	def _summarize(self,lst):
-		columns = ['ext','allEdgeHits','Offloadhits','allHitsOffload','TrafficPercentage','CPCODE']
+		columns = [self.groupby,"allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes","allHitsOffload","allBytesOffload",'offloadHits','offloadBytes','trafficHitPercentage','trafficBytePercentage','CPCODE']
 
 		df = pd.DataFrame(columns=columns)
 		df = df.append(lst, ignore_index=True)
-		del df['TrafficPercentage']
+		del df['trafficHitPercentage']
+		del df['trafficBytePercentage']
 		del df['allHitsOffload']
-		df = df.groupby('CPCODE')[["allEdgeHits","Offloadhits"]].agg({'allEdgeHits':'sum','Offloadhits':'sum'}).reset_index().sort_values(['allEdgeHits'], ascending=False)
-		df['Offload'] =  round(df['Offloadhits']/df['allEdgeHits'].sum()*100,2)
-		df['TrafficPercentage'] = round((df['allEdgeHits']/df['allEdgeHits'].sum())*100,2)
+		del df['allBytesOffload']
+
+		df = df.groupby('CPCODE')[["allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes",'offloadHits','offloadBytes']].agg({'allEdgeHits':'sum','allOriginHits':'sum','allEdgeBytes':'sum','allOriginBytes':'sum','offloadHits':'sum','offloadBytes':'sum'}).reset_index().sort_values(['allEdgeBytes'], ascending=False)
+
+		df['offloadHits'] =  round(df['offloadHits']/df['allEdgeHits']*100,2)
+		df['offloadBytes'] =  round(df['offloadBytes']/df['allEdgeBytes']*100,2)
+
+		df['trafficHitPercentage'] = round((df['allEdgeHits']/df['allEdgeHits'].sum())*100,2)
+		df['trafficBytePercentage'] = round((df['allEdgeBytes']/df['allEdgeBytes'].sum())*100,2)
 
 		return df
 	
@@ -1173,19 +1206,23 @@ class Aggregator:
 	
 		parsed = urlparse(url)
 		root, ext = splitext(parsed.path)
-		if ext == '':
-			return 'None'
+		if self.groupby == 'ext':
+			if ext == '':
+				return 'extensionless'
+			return ext[1:]
+		else:
+			return re.sub(r'^.*?/', '/', root)
+				
 	
-		return ext 
+		return ext[1:]
 	
-	def _getoffloadHits(self,total,perc):
-		return round(perc/100*total,2)
+	def _getoffload(self,t,x):
+		return (t-x)
 	
 	def _getTotalOffload(self,totalhits,totaloffloadhist):
 		return (totaloffloadhist/totalhits)*100
-	
-	# [END] ACC Reporting API: Offload
-	def readJson(self,location):
+
+	def _readJson(self,location):
 		if not os.path.isfile(location):
 			return None
 		with open(location, 'r') as f:
@@ -1197,7 +1234,9 @@ if __name__=="__main__":
 	# TODO: remove CP and Group, etc prefix grp_
 
 	parser, args = ArgsParser()
+
 	
+
 	if args['verbose']:
 		console = ConsoleLogging()
 		console.setLevel("DEBUG")
@@ -1205,52 +1244,54 @@ if __name__=="__main__":
 	else:
 		console = ConsoleLogging()
 		console.configure_logging()
-	obj_agg = Aggregator(console,args)
-		
-	
+	if args['section']:
+		obj_agg = Aggregator(console,args,args['section'])
+	else:
+		obj_agg = Aggregator(console,args)
 	if args['type'] != 'har':
-		obj_agg.log.info("Account ID: {0}".format(args['account_key']))
-		if not args['account_key']:
-			parser.error('--account-key has required for operation.')
-		else:
-			obj_agg.log.info("Getting Account Details")
-			if obj_agg.getAccountDetails():	
-				if args['type'] == 'as':
-					obj_agg.reportType = 'as'
-					
-					obj_agg.log.info("Starting Account Summary")
-					obj_agg.accountSummary()
-					obj_agg.clear_cache()
-				elif args['type'] == 'os' :
-					obj_agg.reportType = 'os'
+		
+		# if not args['switchKey']:
+		# 	parser.error('--switchKey has required for operation.')
+		# else:
+		obj_agg.log.info("Getting Account Details")
+		if obj_agg.getAccountDetails():	
+			if args['type'] == 'as':
+				obj_agg.reportType = 'as'
+				
+				obj_agg.log.info("Starting Account Summary")
+				obj_agg.accountSummary()
+				obj_agg.clear_cache()
+			elif args['type'] == 'os' :
+				obj_agg.reportType = 'os'
 
-					obj_agg.log.info("Starting Offload Summary")
-					if args['cpcodes']:
-						if not args['start'] and not args['end']:
-							obj_agg.log.info("Performing Analysis for previous month.")
-							obj_agg.print_offload(args['cpcodes'])
-						else:
-							if obj_agg._validateDate(args['start']):
-								if obj_agg._validateDate(args['end']):
-										obj_agg.print_offload(args['cpcodes'],args['start'],args['end'])
-								else:
-									parser.error('--end has incorrect data format, should be YYYY-MM-DD.')
-							else:
-								parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
+				obj_agg.log.info("Starting Offload Summary")
+				if args['cpcodes']:
+					
+					if not args['start'] and not args['end']:
+						obj_agg.log.info("Performing Analysis for previous month.")
+						obj_agg.print_offload(args['cpcodes'])
 					else:
-						obj_agg.log.info("Performing Account wide Analysis.")
-						
-						if not args['start'] and not args['end']:
-							obj_agg.log.info("Performing Analysis for previous month.")
-							obj_agg.print_offload()
-						else:
-							if obj_agg._validateDate(args['start']):
-								if obj_agg._validateDate(args['end']):
-										obj_agg.print_offload(None,args['start'],args['end'])
-								else:
-									parser.error('--end has incorrect data format, should be YYYY-MM-DD.')
+						if obj_agg._validateDate(args['start']):
+							if obj_agg._validateDate(args['end']):
+									obj_agg.print_offload(args['cpcodes'],args['start'],args['end'])
 							else:
-								parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
+								parser.error('--end has incorrect data format, should be YYYY-MM-DD.')
+						else:
+							parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
+				else:
+					obj_agg.log.info("Performing Account wide Analysis.")
+					
+					if not args['start'] and not args['end']:
+						obj_agg.log.info("Performing Analysis for previous month.")
+						obj_agg.print_offload()
+					else:
+						if obj_agg._validateDate(args['start']):
+							if obj_agg._validateDate(args['end']):
+									obj_agg.print_offload(None,args['start'],args['end'])
+							else:
+								parser.error('--end has incorrect data format, should be YYYY-MM-DD.')
+						else:
+							parser.error('--start has incorrect data format, should be YYYY-MM-DD.')
 	else:
 		if args['type'] == 'har':
 			obj_agg.reportType = 'har'
@@ -1261,7 +1302,7 @@ if __name__=="__main__":
 				if args['file']:
 					lst_firstparty = []
 
-					obj_json = obj_agg.readJson(args['file']) 
+					obj_json = obj_agg._readJson(args['file']) 
 					if obj_json is None:
 						obj_agg.log.error("No file found in '{0}'".format(args['file']))
 					else:
