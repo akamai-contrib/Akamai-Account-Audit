@@ -65,7 +65,7 @@ When this program is run, it will create a folder within the current directory u
 | secMatch | Lists all the WAF security configuration match targets in the account. |
 | secConfigbyHost | Lists all hostnames and corresponding configurations nd match policies. |
 
-[Example Output can be found here!](Examples)
+[Example Output can be found here!](Examples/Account-Summary.xlsx)
 
 ### Offload Summary
 
@@ -84,10 +84,14 @@ python3 akamai-audit.py --type os --start 2020-10-01 --end 2020-11-01 --cpcodes 
 
 |Argument| Purpose|
 |---------|--------|
-| --start|  [OPTIONAL] Start Date in format 'YYYY-MM-DD'. If not provided default is last month's traffic. |
-| --end |  [OPTIONAL] End Date in format 'YYYY-MM-DD'. If not provided default is last month's traffic. |
-| --cpcodes |  [OPTIONAL] List of cpcodes to query (space delimited). If noy provided, account wide analysis will be done. |
-| --groupby [ext\|url] |  [OPTIONAL] By default this report aggregates by URL extension but in many cases like API's we will not have extensions. For those cases we can aggregate by URL's.|
+| --start|  [OPTIONAL] Start Date in the format 'YYYY-MM-DD'. If not provided default is last month's traffic. |
+| --end |  [OPTIONAL] End Date in the format 'YYYY-MM-DD'. If not provided default is last month's traffic. |
+| --cpcodes |  [OPTIONAL] List of cpcodes to query (space-delimited). If not provided, an account-wide analysis will be done. |
+| --groupby [ext\|url] |  [OPTIONAL] By default this report aggregates by URL extension but in many cases like API's, we will not have extensions. For those cases, we can aggregate by URLs.|
+
+[Example Output: By Ext](Examples/Offload-Summary-by-Extension.xlsx)
+[Example Output: By Ext](Examples/Offload-Summary-by-URL.xlsx)
+
 
 ### HTTP-Archive(HAR) Summary
 
@@ -103,5 +107,5 @@ python3 akamai-audit.py  --type har --domain roymartinez.dev --file ~/Desktop/ro
 |Argument| Purpose|
 |---------|--------|
 | --file|  [REQUIRED] File location to be analysed. |
-| '--domain |  [REQUIRED] will be appended to this list. If only one domain is in quesion, --domain is all you need. |
-| --first-parties |  [OPTIONAL] List of first party domains --domain will be appended to this list. If only one domain is in quesion, --domain is all you need. Used only in Har Analysis. |
+| '--domain |  [REQUIRED] will be appended to this list. If only one domain is in question, --domain is all you need. |
+| --first-parties |  [OPTIONAL] List of first party domains --domain will be appended to this list. If only one domain is in question, --domain is all you need. Used only in Har Analysis. |
