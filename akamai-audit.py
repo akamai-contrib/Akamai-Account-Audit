@@ -1083,55 +1083,7 @@ class Aggregator:
 		return True
 
 	# [START] ACC Reporting API: Offload
-	def _ReportingWorker(self,cpcode,rtype,lst_reviewed_cpcodes,lst_reviewed_cpcodes_df):
-		#TODO: add offload % back
-		if cpcode in lst_reviewed_cpcodes:
-			return False
-		self.log.info("Gathering offload data for CPcode:'{0}'".format(cpcode))
-		lst_reviewed_cpcodes.append(cpcode)
-		resultsHits = (self.wrapper.reporting('urlhits-by-url',cpcode,self.startDate,self.endDate,rtype))
 
-		df_hits = pd.DataFrame(resultsHits['data'])
-		if len(df_hits.index) <= 0:
-			self.log.warning("No Data found for CPcode:'{0}'".format(cpcode))
-			return None
-		resultsbytes = (self.wrapper.reporting('urlbytes-by-url',cpcode,self.startDate,self.endDate,rtype))
-		df_bytes = pd.DataFrame(resultsbytes['data'])
-		df_merged= df_hits.merge(df_bytes, on='hostname.url')
-		df_merged = df_merged.astype({"allEdgeHits": int,"allOriginHits": int, "allHitsOffload": float,"allEdgeBytes": int, "allOriginBytes": int, "allBytesOffload": float})
-		df_merged[self.groupby] = df_merged['hostname.url'].apply(self._getUrlExt)
-		df_merged = df_merged.groupby(self.groupby)[["allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes","allHitsOffload","allBytesOffload"]].agg({'allEdgeHits':'sum','allOriginHits':'sum','allHitsOffload':'mean','allEdgeBytes':'sum','allOriginBytes':'sum','allBytesOffload':'mean'}).reset_index().sort_values(['allEdgeBytes'], ascending=False)
-		df_merged['offloadHits'] = df_merged.apply(lambda x: self._getoffload(x.allEdgeHits, x.allOriginHits), axis=1)
-		df_merged['offloadBytes'] = df_merged.apply(lambda x: self._getoffload(x.allEdgeBytes, x.allOriginBytes), axis=1)
-		df_merged['offloadHitsPercentage'] =  round(df_merged['offloadHits']/df_merged['allEdgeHits']*100,2)
-		df_merged['offloadBytesPercentage'] =  round(df_merged['offloadBytes']/df_merged['allEdgeBytes']*100,2)
-		df_merged['trafficHitPercentage'] = round(df_merged['allEdgeHits']/df_merged['allEdgeHits'].sum()*100,2)
-		df_merged['trafficBytePercentage'] = round(df_merged['allEdgeBytes']/df_merged['allEdgeBytes'].sum()*100,2)
-		df_merged = df_merged.reset_index(drop=True).sort_values(['trafficBytePercentage'], ascending=False)
-		df_merged['CPCODE'] = cpcode
-		
-		if df_merged is None:
-			self.log.info("No Data found for CPcode: '{0}'".format(cpcode))
-			return None
-		else:
-			lst_reviewed_cpcodes_df.append(df_merged)
-
-	def _writeReport(self, lst_reviewed_cpcodes_df):
-		writer = pd.ExcelWriter(self.outputdir+'Offload-Summary.xlsx')
-		
-		df_summary = self._summarize(lst_reviewed_cpcodes_df)
-		
-		df_summary.to_excel(writer, sheet_name='Summary',engine='xlsxwriter',index=False)
-		for index, row in df_summary.iterrows():
-
-			for df in lst_reviewed_cpcodes_df:
-				if int(df['CPCODE'][0]) == int(row['CPCODE']):
-					df.rename(columns={'allHitsOffload':'Offload'}, inplace=True)
-					df[[self.groupby,"allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes",'offloadHits','offloadBytes','offloadHitsPercentage','offloadBytesPercentage','trafficHitPercentage','trafficBytePercentage']].to_excel(writer, sheet_name='{0}'.format(df['CPCODE'].iloc[0]),engine='xlsxwriter',index=False)
-					
-		writer.save()
-	
-		return
 	
 	def _enforceformat(self,dateString):
 
@@ -1181,26 +1133,83 @@ class Aggregator:
 			self.log.info("Report successfull, output can be found here: '{0}'".format(self.outputdir+'Offload-Summary.xlsx'))
 		else:
 			self.log.warning("Report unsuccessfull, no CPcode data found.")
+
+	def _ReportingWorker(self,cpcode,rtype,lst_reviewed_cpcodes,lst_reviewed_cpcodes_df):
+		if cpcode in lst_reviewed_cpcodes:
+			return False
+		self.log.info("Gathering offload data for CPcode:'{0}'".format(cpcode))
+		lst_reviewed_cpcodes.append(cpcode)
+		resultsHits = (self.wrapper.reporting('urlhits-by-url',cpcode,self.startDate,self.endDate,rtype))
+
+		df_hits = pd.DataFrame(resultsHits['data'])
+		if len(df_hits.index) <= 0:
+			self.log.warning("No Data found for CPcode:'{0}'".format(cpcode))
+			return None
+		resultsbytes = (self.wrapper.reporting('urlbytes-by-url',cpcode,self.startDate,self.endDate,rtype))
+		df_bytes = pd.DataFrame(resultsbytes['data'])
+
+		df_merged= df_hits.merge(df_bytes, on='hostname.url')
+
+		df_merged = df_merged.astype({"allEdgeHits": int,"allOriginHits": int, "allHitsOffload": float,"allEdgeBytes": int, "allOriginBytes": int, "allBytesOffload": float})
+		df_merged[self.groupby] = df_merged['hostname.url'].apply(self._getUrlExt)
+		df_merged = df_merged.groupby(self.groupby)[["allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes","allHitsOffload","allBytesOffload"]].agg({'allEdgeHits':'sum','allOriginHits':'sum','allHitsOffload':'mean','allEdgeBytes':'sum','allOriginBytes':'sum','allBytesOffload':'mean'}).reset_index().sort_values(['allEdgeBytes'], ascending=False)
+
+		df_merged['offloadedHits'] = df_merged.apply(lambda x: self._getoffload(x.allEdgeHits, x.allOriginHits), axis=1)
+		df_merged['offloadedBytes'] = df_merged.apply(lambda x: self._getoffload(x.allEdgeBytes, x.allOriginBytes), axis=1)
+		df_merged['offloadedHitsPercentage'] = round(df_merged['offloadedHits']/df_merged['allEdgeHits']*100,2)
+		df_merged['offloadedBytesPercentage'] = round(df_merged['offloadedBytes']/df_merged['allEdgeBytes']*100,2)
+
+		df_merged['totalHitPercentage'] = round(df_merged['allEdgeHits']/df_merged['allEdgeHits'].sum()*100,2)
+		df_merged['totalBytePercentage'] = round(df_merged['allEdgeBytes']/df_merged['allEdgeBytes'].sum()*100,2)
+
+		df_merged = df_merged.reset_index(drop=True).sort_values(['totalBytePercentage'], ascending=False)
+		df_merged['CPCODE'] = cpcode
+		if df_merged is None:
+			self.log.info("No Data found for CPcode: '{0}'".format(cpcode))
+			return None
+		else:
+			lst_reviewed_cpcodes_df.append(df_merged)
+
+	def _writeReport(self, lst_reviewed_cpcodes_df):
+		writer = pd.ExcelWriter(self.outputdir+'Offload-Summary.xlsx')
+		
+		df_summary = self._summarize(lst_reviewed_cpcodes_df)
+		df_summary.to_excel(writer, sheet_name='Summary',engine='xlsxwriter',index=False)
+		for index, row in df_summary.iterrows():
+
+			for df in lst_reviewed_cpcodes_df:
+				if int(df['CPCODE'][0]) == int(row['CPCODE']):
+					df.rename(columns={'allHitsOffload':'Offload'}, inplace=True)
+					df[[self.groupby, 'allEdgeHits' , 'offloadedHits' , 'allOriginHits' ,
+					'offloadedHitsPercentage','totalHitPercentage', 'allEdgeBytes' , 
+					'allOriginBytes' , 'offloadedBytes' ,'offloadedBytesPercentage',
+					'totalBytePercentage']].to_excel(writer, sheet_name='{0}'.format(df['CPCODE'].iloc[0]),engine='xlsxwriter',index=False)
+					
+		writer.save()
 	
+		return
 	def _summarize(self,lst):
-		columns = [self.groupby,"allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes","allHitsOffload","allBytesOffload",'offloadHits','offloadBytes','trafficHitPercentage','trafficBytePercentage','CPCODE']
+		columns = [self.groupby,"allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes","allHitsOffload","allBytesOffload",'offloadedHits','offloadedBytes','trafficHitPercentage','trafficBytePercentage','CPCODE']
 
 		df = pd.DataFrame(columns=columns)
 		df = df.append(lst, ignore_index=True)
-		del df['trafficHitPercentage']
-		del df['trafficBytePercentage']
-		del df['allHitsOffload']
-		del df['allBytesOffload']
+		del df['totalHitPercentage']
+		del df['totalBytePercentage']
 
-		df = df.groupby('CPCODE')[["allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes",'offloadHits','offloadBytes']].agg({'allEdgeHits':'sum','allOriginHits':'sum','allEdgeBytes':'sum','allOriginBytes':'sum','offloadHits':'sum','offloadBytes':'sum'}).reset_index().sort_values(['allEdgeBytes'], ascending=False)
 
-		df['offloadHitsPercentage'] =  round(df['offloadHits']/df['allEdgeHits']*100,2)
-		df['offloadBytesPercentage'] =  round(df['offloadBytes']/df['allEdgeBytes']*100,2)
+		df = df.groupby('CPCODE')[["allEdgeHits",'offloadedHits',"allOriginHits","allEdgeBytes",
+		'offloadedBytes',"allOriginBytes"]].agg({'allEdgeHits':'sum',
+		'allOriginHits':'sum','allEdgeBytes':'sum','allOriginBytes':'sum','offloadedHits':'sum',
+		'offloadedBytes':'sum'}).reset_index().sort_values(['allEdgeBytes'], ascending=False)
 
-		df['trafficHitPercentage'] = round((df['allEdgeHits']/df['allEdgeHits'].sum())*100,2)
-		df['trafficBytePercentage'] = round((df['allEdgeBytes']/df['allEdgeBytes'].sum())*100,2)
+		df['offloadedHitsPercentage'] =  round((df['offloadedHits']/df['allEdgeHits'])*100,2)
+		df['offloadedBytesPercentage'] =  round((df['offloadedBytes']/df['allEdgeBytes'])*100,2)
 
-		return df
+		df['totalHitPercentage'] = round((df['allEdgeHits']/df['allEdgeHits'].sum())*100,2)
+		df['totalBytePercentage'] = round((df['allEdgeBytes']/df['allEdgeBytes'].sum())*100,2)
+		
+		return df[['CPCODE', "allEdgeHits",'offloadedHits',"allOriginHits",	"offloadedHitsPercentage","allEdgeBytes",'offloadedBytes',
+		"allOriginBytes","offloadedBytesPercentage"]]
 	
 	def _getUrlExt(self,url):
 	
