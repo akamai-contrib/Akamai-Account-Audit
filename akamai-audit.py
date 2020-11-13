@@ -1236,7 +1236,8 @@ class Aggregator:
 		return ext[1:]
 
 	def _getUrlPath(self,url):
-		return url.split('?')[0]
+		return re.sub(r'^.*?/', '/', url.split('?')[0])
+		 
 
 	def _getUrlHost(self,url):
 	
