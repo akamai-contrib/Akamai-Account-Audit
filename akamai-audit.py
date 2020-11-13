@@ -1235,17 +1235,9 @@ class Aggregator:
 			return 'extensionless'
 		return ext[1:]
 
-				
-	
-		return ext[1:]
 	def _getUrlPath(self,url):
-		parsed = urlparse(url)
-		
-		root, ext = splitext(parsed.path)
-		return re.sub(r'^.*?/', '/', root)
-				
-	
-		return ext[1:]
+		return url.split('?')[0]
+
 	def _getUrlHost(self,url):
 	
 	
