@@ -910,9 +910,11 @@ class Aggregator:
 				self.productMap  = json.load(f)
 
 	def mineHar(self,har,lst_firstparty):
-		colmms = ['url','host','host-type','protocol','method','status','ext','cpcode','ttl','server','cdn-cache','cdn-cache-parent','cdn-cache-key','cdn-req-id','vary','appOrigin','content-length','content-length-origin','transfer-size','blocked','dns','ssl','connect','send','ttfb','receive','edgeTime','originTime'
-		]
-		dat_clean = pd.DataFrame(columns=colmms)
+		columns = ['url','host','host-type','protocol','method','status','ext','cpcode','ttl','server',
+		'cdn-cache','cdn-cache-parent','cdn-cache-key','cdn-req-id','vary','appOrigin','content-type','content-length',
+		'content-length-origin','transfer-size','blocked','dns','ssl','connect','send','ttfb','receive',
+		'edgeTime','originTime']
+		dat_clean = pd.DataFrame(columns=columns)
 		for r in har['log']['entries']:
 			u = str(r['request']['url']).split('?')[0]
 			host = re.search('://(.+?)/', u, re.IGNORECASE).group(0).replace(':','').replace('/','')
@@ -976,6 +978,7 @@ class Aggregator:
 				'cdn-req-id':str(self._findHeader(r,'response','x-akamai-request-id','eq')),
 				'vary':str(self._findHeader(r,'response','vary','eq')),
 				'appOrigin':origin,
+				'content-type':str(self._findHeader(r,'response','content-type','eq')),
 				'content-length':ct,
 				'content-length-origin':ct_origin,
 				'transfer-size':r['response']['_transferSize'],
@@ -991,7 +994,7 @@ class Aggregator:
 				
 				}
 			dat_clean = dat_clean.append(new_row,ignore_index=True)
-		dat_clean = dat_clean.groupby(colmms).size().reset_index(name='Count')   
+		dat_clean = dat_clean.groupby(columns).size().reset_index(name='Count')   
 		self.dfs['har'] = dat_clean
 		return True
 
