@@ -1117,14 +1117,14 @@ class Aggregator:
 			self.endDate = self._enforceformat(end)
 
 		else:
-			year = datetime.datetime.today().year
+	
 
-			endMonth = datetime.datetime.now().strftime('%m')
-			startMonth = datetime.datetime.now() - datetime.timedelta(weeks=4)
-			startMonth = startMonth.strftime('%m')
+			self.endDate = datetime.datetime.now()
+			self.startDate = datetime.datetime.now() - datetime.timedelta(weeks=4)
+		
 
-			self.startDate = "{0}-{1}-01".format(datetime.datetime.today().year,startMonth)
-			self.endDate = "{0}-{1}-01".format(datetime.datetime.today().year,endMonth)
+			self.startDate = "{0}-{1}-01".format(self.startDate.strftime('%Y'),self.startDate.strftime('%m'))
+			self.endDate = "{0}-{1}-01".format(datetime.datetime.today().year,self.endDate.strftime('%m'))
 		
 		self.log.info("Report Start-Date '{0}', End-Date '{1}'".format(self.startDate,self.endDate))
 		with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
