@@ -1159,10 +1159,12 @@ class Aggregator:
 			df_merged['key'] = df_merged['hostname.url'].apply(self._getUrlHost)
 			df_merged['url']  = df_merged['hostname.url'].apply(self._getUrlPath)
 			df_merged = df_merged.groupby(['key','url'])[["allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes","allHitsOffload","allBytesOffload"]].agg({'allEdgeHits':'sum','allOriginHits':'sum','allHitsOffload':'mean','allEdgeBytes':'sum','allOriginBytes':'sum','allBytesOffload':'mean'}).reset_index().sort_values(['allEdgeBytes'], ascending=False)
+			df_merged['ext']  = df_merged['url'].apply(self._getUrlExt)
 		
 		else:
 			df_merged['ext']  = df_merged['hostname.url'].apply(self._getUrlExt)
 			df_merged = df_merged.groupby('ext')[["allEdgeHits","allEdgeBytes","allOriginHits","allOriginBytes","allHitsOffload","allBytesOffload"]].agg({'allEdgeHits':'sum','allOriginHits':'sum','allHitsOffload':'mean','allEdgeBytes':'sum','allOriginBytes':'sum','allBytesOffload':'mean'}).reset_index().sort_values(['allEdgeBytes'], ascending=False)
+		
 		df_merged['offloadedHits'] = df_merged.apply(lambda x: self._getoffload(x.allEdgeHits, x.allOriginHits), axis=1)
 		df_merged['offloadedBytes'] = df_merged.apply(lambda x: self._getoffload(x.allEdgeBytes, x.allOriginBytes), axis=1)
 		df_merged['offloadedHitsPercentage'] = round(df_merged['offloadedHits']/df_merged['allEdgeHits']*100,2)
@@ -1173,6 +1175,7 @@ class Aggregator:
 
 		df_merged = df_merged.reset_index(drop=True).sort_values(['totalBytePercentage'], ascending=False)
 		df_merged['CPCODE'] = cpcode
+		
 		if df_merged is None:
 			self.log.info("No Data found for CPcode: '{0}'".format(cpcode))
 			return None
@@ -1192,7 +1195,7 @@ class Aggregator:
 					df.rename(columns={'allHitsOffload':'Offload'}, inplace=True)
 					if self.groupby == 'url':
 							
-						df[['key','url', 'allEdgeHits' , 'offloadedHits' , 'allOriginHits' ,
+						df[['key','url','ext','allEdgeHits' , 'offloadedHits' , 'allOriginHits' ,
 						'offloadedHitsPercentage','totalHitPercentage', 'allEdgeBytes' , 
 						'allOriginBytes' , 'offloadedBytes' ,'offloadedBytesPercentage',
 						'totalBytePercentage']].to_excel(writer, sheet_name='{0}'.format(df['CPCODE'].iloc[0]),engine='xlsxwriter',index=False)
@@ -1229,7 +1232,7 @@ class Aggregator:
 		"allOriginBytes","offloadedBytesPercentage",'totalBytePercentage']]
 	
 	def _getUrlExt(self,url):
-
+	
 		parsed = urlparse(url)
 		
 		root, ext = splitext(parsed.path)
@@ -1250,7 +1253,7 @@ class Aggregator:
 		parsed = urlparse(url)
 		
 		root, ext, query = splitext(parsed.path)
-		print(query)
+
 		return query
 	def _getoffload(self,t,x):
 		return (t-x)
