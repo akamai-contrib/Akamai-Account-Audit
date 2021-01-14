@@ -912,7 +912,7 @@ class Aggregator:
 	def mineHar(self,har,lst_firstparty):
 		columns = ['url','host','host-type','protocol','method','status','ext','cpcode','ttl','server',
 		'cdn-cache','cdn-cache-parent','cdn-cache-key','cdn-req-id','vary','appOrigin','content-type','content-length',
-		'content-length-origin','transfer-size','blocked','dns','ssl','connect','send','ttfb','receive',
+		'content-length-origin','transfer-size','content-size','blocked','dns','ssl','connect','send','ttfb','receive',
 		'edgeTime','originTime']
 		dat_clean = pd.DataFrame(columns=columns)
 		for r in har['log']['entries']:
@@ -982,6 +982,7 @@ class Aggregator:
 				'content-length':ct,
 				'content-length-origin':ct_origin,
 				'transfer-size':r['response']['_transferSize'],
+				'content-size':r['response']['content']['size'],
 				'blocked':r['timings']['blocked'],
 				'dns':r['timings']['dns'],
 				'ssl':r['timings']['ssl'],

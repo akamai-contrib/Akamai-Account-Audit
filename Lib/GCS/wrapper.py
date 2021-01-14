@@ -60,6 +60,7 @@ class Wrapper:
 			params = 'accountSwitchKey={0}'.format(self.account)
 		else:	
 			params = None
+	
 
 		return self.httpCaller.getResult('/papi/v1/groups/',parameters=params)
 		
