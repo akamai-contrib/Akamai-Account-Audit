@@ -652,7 +652,7 @@ class Aggregator:
 				
 				if 'cnameTo' in hostname:
 					cname_defined = hostname['cnameTo']
-					cname_actual = str(self.getCNAME(host))
+				cname_actual = str(self.getCNAME(host))
 				
 				slot = None
 				# TODO: Not working properly
