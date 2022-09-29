@@ -229,7 +229,8 @@ class Aggregator:
 		contracts = self.wrapper.getContractNames()	
 		for contract in contracts['contracts']['items']:
 			products = self._getProducts(contract['contractId'])
-			
+			self.log.debug("Found contract: '{0}' - '{1}'".format(contract['contractId'][4:], contract['contractTypeName']))
+
 			new_row = {
 				'Contract_ID': contract['contractId'][4:],
 				'Contract_Name':contract['contractTypeName'],
@@ -390,6 +391,7 @@ class Aggregator:
 				None
 		"""
 		groupId = group['groupId']
+		groupName = group['groupName']
 
 		if 'contractIds' in group:	
 					
@@ -456,7 +458,7 @@ class Aggregator:
 						
 
 					
-		self.log.debug("Fetched configs for group: '{0}'".format(groupId[4:]))
+		self.log.debug("Fetched configs for group: '{0}' - '{1}'".format(groupId[4:], groupName))
 		return None
 
 	def printCPcodes(self):
@@ -657,7 +659,7 @@ class Aggregator:
 				if cname_actual == "None":
 					isAkamaized = "Unknown"
 					secureHostName = "Unknown"
-					# slot = "Unknown"
+					slot = "None"
 				else:
 					isAkamaized = self._isAkamaized(cname_actual)
 					secureHostName = self._isESSL(cname_actual)
@@ -720,6 +722,7 @@ class Aggregator:
 				if 'enrollments' in enrollment_results:
 					if len(enrollment_results['enrollments']) >0:
 						for i in enrollment_results['enrollments']:
+							self.log.info("Getting Enrollment ID '{0}'".format(str(i['location']).split('/')[4]))
 							Enrollment_ID = str(i['location']).split('/')[4]
 							
 							new_row = {
@@ -1363,9 +1366,3 @@ if __name__=="__main__":
 				parser.error('--domain is needed for HTTP-Archive.')
 
 	obj_agg.clear_cache()
-
-
-
-		
-	
-	
